@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  DuraCloud
+Transform:
+  - AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    LoggingConfig:
+      LogFormat: JSON
+
+Resources:
+  ##### FUNCTIONS
+  BucketCreatedFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerContext: ./cmd/bucket-created
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-bucket-created"
+    Properties:
+      Architectures:
+        - x86_64
+      Description: DuraCloud function that processes bucket created events
+      Environment:
+        Variables:
+          BUCKET_PREFIX: !Sub "${AWS::StackName}"
+      MemorySize: 128
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Timeout: 100
+
+  ##### OTHER RESOURCES (TODO: docs for each resource)
+  EventsBucketCreatedRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - CreateBucket
+      Targets:
+        - Arn: !GetAtt BucketCreatedFunction.Arn
+          Id: "S3BucketCreated"
+          RoleArn: !GetAtt IAMEventsInvokeLambdaRole.Arn
+
+  CloudTrailEventLogs:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: S3CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub "${AWS::StackName}-event-logs"
+      S3BucketName: !Ref S3CloudTrailEventLogsBucket
+      IncludeGlobalServiceEvents: false
+      IsLogging: true
+      IsMultiRegionTrail: false
+      EventSelectors:
+        - ReadWriteType: WriteOnly
+          IncludeManagementEvents: true
+
+  IAMEventsInvokeLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-invoke-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt BucketCreatedFunction.Arn
+
+  LogsBucketCreatedFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${BucketCreatedFunction}"
+      RetentionInDays: 7
+
+  S3CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3CloudTrailEventLogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "CloudTrailGetBucketAclAccessPolicy"
+            Effect: "Allow"
+            Principal:
+              Service: "cloudtrail.amazonaws.com"
+            Action: "s3:GetBucketAcl"
+            Resource: !Sub "arn:aws:s3:::${S3CloudTrailEventLogsBucket}"
+          - Sid: "CloudTrailPutObjectAccessPolicy"
+            Effect: "Allow"
+            Principal:
+              Service: "cloudtrail.amazonaws.com"
+            Action: "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${S3CloudTrailEventLogsBucket}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+  S3CloudTrailEventLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-event-logs"
+
+  S3ManagedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-managed"
+
+  S3ReplicationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-replication"
