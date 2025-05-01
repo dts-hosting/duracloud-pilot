@@ -1,0 +1,10 @@
+.DS_Store
+.aws-sam
+.env*
+.idea
+.sam-translate/
+.vscode/settings.json
+*.html
+dist
+example
+node_modules
