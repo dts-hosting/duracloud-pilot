@@ -1,4 +1,4 @@
-package main
+package events
 
 import (
 	"encoding/json"
@@ -72,27 +72,27 @@ func TestBucketCreatedIdentification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := BucketCreatedEvent{
-				Detail: Detail{
-					RequestParameters: RequestParameters{
+			event := &BucketCreatedEvent{
+				Detail: BucketCreatedDetail{
+					RequestParameters: BucketCreatedRequestParameters{
 						BucketName: tt.bucketName,
 					},
 				},
 			}
 
-			if got := event.IsEventLogsBucket(); got != tt.isEventLogs {
+			if got := IsEventLogsBucket(event); got != tt.isEventLogs {
 				t.Errorf("IsEventLogsBucket() = %v, want %v", got, tt.isEventLogs)
 			}
-			if got := event.IsManagedBucket(); got != tt.isManaged {
+			if got := IsManagedBucket(event); got != tt.isManaged {
 				t.Errorf("IsManagedBucket() = %v, want %v", got, tt.isManaged)
 			}
-			if got := event.IsPublicBucket(); got != tt.isPublic {
+			if got := IsPublicBucket(event); got != tt.isPublic {
 				t.Errorf("IsPublicBucket() = %v, want %v", got, tt.isPublic)
 			}
-			if got := event.IsReplicationBucket(); got != tt.isReplication {
+			if got := IsReplicationBucket(event); got != tt.isReplication {
 				t.Errorf("IsReplicationBucket() = %v, want %v", got, tt.isReplication)
 			}
-			if got := event.IsRestrictedBucket(); got != tt.isRestricted {
+			if got := IsRestrictedBucket(event); got != tt.isRestricted {
 				t.Errorf("IsRestrictedBucket() = %v, want %v", got, tt.isRestricted)
 			}
 		})

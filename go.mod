@@ -1,4 +1,4 @@
-module duracloud-bucket-created
+module duracloud
 
 go 1.24.2
 

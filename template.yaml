@@ -14,8 +14,8 @@ Resources:
   BucketCreatedFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      DockerContext: ./cmd/bucket-created
-      Dockerfile: Dockerfile
+      DockerContext: .
+      Dockerfile: Dockerfile.bucket-created
       DockerTag: !Sub "${AWS::StackName}-bucket-created"
     Properties:
       Architectures:
