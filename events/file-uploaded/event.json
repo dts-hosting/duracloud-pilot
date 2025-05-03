@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "19dd0b57-b21e-4ac1-bd88-01bbb068cb78",
+      "receiptHandle": "MessageReceiptHandle",
+      "body": "{\"version\":\"0\",\"id\":\"17793124-05d4-b198-2fde-7ededc63b89e\",\"detail-type\":\"Object Created\",\"source\":\"aws.s3\",\"account\":\"123456789012\",\"time\":\"2021-11-12T00:00:00Z\",\"region\":\"us-east-1\",\"resources\":[\"arn:aws:s3:::duracloud-pilot-test\"],\"detail\":{\"version\":\"0\",\"bucket\":{\"name\":\"duracloud-pilot-test\"},\"object\":{\"key\":\"folder/example.pdf\",\"size\":1024,\"etag\":\"e7e88adf7af80e6fdcb57c5c733b354a\",\"sequencer\":\"0A1B2C3D4E5F678901\"},\"request-id\":\"C3D4E5F6A7B8C9\",\"requester\":\"123456789012\",\"source-ip-address\":\"192.0.2.1\",\"reason\":\"PutObject\"}}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1545082650636",
+        "SenderId": "AIDAIENQZJOLO23YVJ4VO",
+        "ApproximateFirstReceiveTimestamp": "1545082650649"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "e4e68fb7bd0e697a0ae8f1bb342846b3",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:duracloud-pilot-object-created",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}

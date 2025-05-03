@@ -2,7 +2,7 @@ package events
 
 import "strings"
 
-// Define an interface for types that have a BucketName() method
+// BucketNamer defines an interface for types that have a BucketName() method
 type BucketNamer interface {
 	BucketName() string
 }

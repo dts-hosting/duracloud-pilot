@@ -72,13 +72,8 @@ func TestBucketCreatedIdentification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := &BucketCreatedEvent{
-				Detail: BucketCreatedDetail{
-					RequestParameters: BucketCreatedRequestParameters{
-						BucketName: tt.bucketName,
-					},
-				},
-			}
+			event := &BucketCreatedEvent{}
+			event.Detail.RequestParameters.BucketName = tt.bucketName
 
 			if got := IsEventLogsBucket(event); got != tt.isEventLogs {
 				t.Errorf("IsEventLogsBucket() = %v, want %v", got, tt.isEventLogs)

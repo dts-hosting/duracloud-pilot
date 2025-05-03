@@ -1,15 +1,11 @@
 package events
 
 type BucketCreatedEvent struct {
-	Detail BucketCreatedDetail `json:"detail"`
-}
-
-type BucketCreatedDetail struct {
-	RequestParameters BucketCreatedRequestParameters `json:"requestParameters"`
-}
-
-type BucketCreatedRequestParameters struct {
-	BucketName string `json:"bucketName"`
+	Detail struct {
+		RequestParameters struct {
+			BucketName string `json:"bucketName"`
+		} `json:"requestParameters"`
+	} `json:"detail"`
 }
 
 func (e *BucketCreatedEvent) BucketName() string {

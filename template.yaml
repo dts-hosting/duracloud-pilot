@@ -10,7 +10,7 @@ Globals:
       LogFormat: JSON
 
 Resources:
-  ##### FUNCTIONS
+  ##### Functions
   BucketCreatedFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -28,9 +28,59 @@ Resources:
       PackageType: Image
       Policies:
         - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                # Basic bucket policy and tagging
+                - s3:GetBucketTagging
+                - s3:PutBucketTagging
+                - s3:GetBucketPolicy
+                - s3:PutBucketPolicy
+                # EventBridge notifications
+                - s3:GetBucketNotificationConfiguration
+                - s3:PutBucketNotificationConfiguration
+                # Inventory configuration
+                - s3:GetBucketInventoryConfiguration
+                - s3:PutBucketInventoryConfiguration
+                - s3:ListBucketInventoryConfigurations
+                - s3:DeleteBucketInventoryConfiguration
+                # Public access settings
+                - s3:GetBucketPublicAccessBlock
+                - s3:PutBucketPublicAccessBlock
+                - s3:GetBucketAcl
+                - s3:PutBucketAcl
+                # Replication configuration
+                - s3:GetBucketReplication
+                - s3:PutBucketReplication
+                - s3:DeleteBucketReplication
+                # Storage tier management
+                - s3:GetBucketLifecycleConfiguration
+                - s3:PutBucketLifecycleConfiguration
+                - s3:DeleteBucketLifecycleConfiguration
+              Resource: "arn:aws:s3:::*"
+            - Effect: Allow
+              Action:
+                - iam:PassRole
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 100
 
-  ##### OTHER RESOURCES (TODO: docs for each resource)
+  ##### Other resources (TODO: docs for each resource)
+  CloudTrailEventLogs:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: S3CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub "${AWS::StackName}-event-logs"
+      S3BucketName: !Ref S3CloudTrailEventLogsBucket
+      IncludeGlobalServiceEvents: false
+      IsLogging: true
+      IsMultiRegionTrail: false
+      EventSelectors:
+        - ReadWriteType: WriteOnly
+          IncludeManagementEvents: true
+
   EventsBucketCreatedRule:
     Type: AWS::Events::Rule
     Properties:
@@ -49,18 +99,31 @@ Resources:
           Id: "S3BucketCreated"
           RoleArn: !GetAtt IAMEventsInvokeLambdaRole.Arn
 
-  CloudTrailEventLogs:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: S3CloudTrailBucketPolicy
+  EventsObjectCreatedRule:
+    Type: AWS::Events::Rule
     Properties:
-      TrailName: !Sub "${AWS::StackName}-event-logs"
-      S3BucketName: !Ref S3CloudTrailEventLogsBucket
-      IncludeGlobalServiceEvents: false
-      IsLogging: true
-      IsMultiRegionTrail: false
-      EventSelectors:
-        - ReadWriteType: WriteOnly
-          IncludeManagementEvents: true
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - "Object Created"
+      Targets:
+        - Arn: !GetAtt SQSObjectCreated.Arn
+          Id: "SendToSQSOnCreate"
+          RoleArn: !GetAtt IAMEventsInvokeSQSRole.Arn
+
+  EventsObjectDeletedRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - "Object Deleted"
+      Targets:
+        - Arn: !GetAtt SQSObjectDeleted.Arn
+          Id: "SendToSQSOnDelete"
+          RoleArn: !GetAtt IAMEventsInvokeSQSRole.Arn
 
   IAMEventsInvokeLambdaRole:
     Type: AWS::IAM::Role
@@ -82,6 +145,41 @@ Resources:
                   - lambda:InvokeFunction
                 Resource:
                   - !GetAtt BucketCreatedFunction.Arn
+
+  IAMEventsInvokeSQSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-invoke-sqs-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource:
+                  - !GetAtt SQSObjectCreated.Arn
+                  - !GetAtt SQSObjectDeleted.Arn
+
+#  LambdaSQSObjectCreatedSource:
+#    Type: AWS::Lambda::EventSourceMapping
+#    Properties:
+#      BatchSize: 10
+#      EventSourceArn: !GetAtt SQSObjectCreated.Arn
+#      FunctionName: !Ref FileUploadedFunction
+
+#  LambdaSQSObjectDeletedSource:
+#    Type: AWS::Lambda::EventSourceMapping
+#    Properties:
+#      BatchSize: 10
+#      EventSourceArn: !GetAtt SQSObjectDeleted.Arn
+#      FunctionName: !Ref FileDeletedFunction
 
   LogsBucketCreatedFunction:
     Type: AWS::Logs::LogGroup
@@ -126,3 +224,13 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-replication"
+
+  SQSObjectCreated:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-object-created"
+
+  SQSObjectDeleted:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-object-deleted"

@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
-	events "duracloud/internal/events"
-
+	"duracloud/internal/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
@@ -22,7 +21,15 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 
 	bucketName := bucketEvent.BucketName()
-	log.Printf("Bucket name: %s", bucketName)
+	log.Printf("Received event for bucket name: %s", bucketName)
+
+	// abort if restricted
+	// apply storage tier
+	// setup replication
+	// setup inventory
+	// setup public access if appropriate
+
+	// enable event bridge notifications
 
 	return nil
 }

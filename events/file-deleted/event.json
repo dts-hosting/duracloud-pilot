@@ -1,0 +1,20 @@
+{
+  "Records": [
+    {
+      "messageId": "2e1424d4-f796-459a-8184-9c92662be6da",
+      "receiptHandle": "MessageReceiptHandle",
+      "body": "{\"version\":\"0\",\"id\":\"1de93a3f-4c90-c1f2-e89b-1237c89b79f2\",\"detail-type\":\"Object Deleted\",\"source\":\"aws.s3\",\"account\":\"123456789012\",\"time\":\"2021-11-12T00:05:00Z\",\"region\":\"us-east-1\",\"resources\":[\"arn:aws:s3:::duracloud-pilot-test\"],\"detail\":{\"version\":\"0\",\"bucket\":{\"name\":\"duracloud-pilot-test\"},\"object\":{\"key\":\"folder/example.pdf\",\"etag\":\"e7e88adf7af80e6fdcb57c5c733b354a\",\"sequencer\":\"0F1E2D3C4B5A678901\"},\"request-id\":\"A1B2C3D4E5F6G7\",\"requester\":\"123456789012\",\"source-ip-address\":\"192.0.2.1\",\"reason\":\"DeleteObject\"}}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1545082950636",
+        "SenderId": "AIDAIENQZJOLO23YVJ4VO",
+        "ApproximateFirstReceiveTimestamp": "1545082950649"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "87d4c5a4c3f1c9e7d2b8a5f6e3d2c1b0",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:duracloud-pilot-object-deleted",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}
