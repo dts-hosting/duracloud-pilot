@@ -1,0 +1,9 @@
+FROM public.ecr.aws/docker/library/golang:1.24 AS build-image
+WORKDIR /src
+COPY . .
+WORKDIR /src/cmd/bucket-requested
+RUN go build -o /src/lambda-handler
+
+FROM public.ecr.aws/lambda/provided:al2023
+COPY --from=build-image /src/lambda-handler .
+ENTRYPOINT ["./lambda-handler"]

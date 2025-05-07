@@ -1,5 +1,6 @@
 package events
 
+// TODO: delete if using bucket-requested
 type BucketCreatedEvent struct {
 	Detail struct {
 		RequestParameters struct {

@@ -11,16 +11,75 @@ Globals:
 
 Resources:
   ##### Functions
-  BucketCreatedFunction:
+# TODO: can delete if using bucket-requested
+#  BucketCreatedFunction:
+#    Type: AWS::Serverless::Function
+#    Metadata:
+#      DockerContext: .
+#      Dockerfile: Dockerfile.bucket-created
+#      DockerTag: !Sub "${AWS::StackName}-bucket-created"
+#    Properties:
+#      Architectures:
+#        - x86_64
+#      Description: DuraCloud function that processes bucket created events
+#      Environment:
+#        Variables:
+#          BUCKET_PREFIX: !Sub "${AWS::StackName}"
+#      MemorySize: 128
+#      PackageType: Image
+#      Policies:
+#        - AWSLambdaBasicExecutionRole
+#        - Statement:
+#            - Effect: Allow
+#              Action:
+#                # Basic bucket policy and tagging
+#                - s3:GetBucketTagging
+#                - s3:PutBucketTagging
+#                - s3:GetBucketPolicy
+#                - s3:PutBucketPolicy
+#                # EventBridge notifications
+#                - s3:GetBucketNotificationConfiguration
+#                - s3:PutBucketNotificationConfiguration
+#                # Inventory configuration
+#                - s3:GetBucketInventoryConfiguration
+#                - s3:PutBucketInventoryConfiguration
+#                - s3:ListBucketInventoryConfigurations
+#                - s3:DeleteBucketInventoryConfiguration
+#                # Public access settings
+#                - s3:GetBucketPublicAccessBlock
+#                - s3:PutBucketPublicAccessBlock
+#                - s3:GetBucketAcl
+#                - s3:PutBucketAcl
+#                # Replication configuration
+#                - s3:GetBucketReplication
+#                - s3:PutBucketReplication
+#                - s3:DeleteBucketReplication
+#                # Storage tier management
+#                - s3:GetBucketLifecycleConfiguration
+#                - s3:PutBucketLifecycleConfiguration
+#                - s3:DeleteBucketLifecycleConfiguration
+#              Resource: "arn:aws:s3:::*"
+#            - Effect: Allow
+#              Action:
+#                - iam:PassRole
+#              Resource: "*"
+#              Condition:
+#                StringEquals:
+#                  "iam:PassedToService": "s3.amazonaws.com"
+#      Timeout: 120
+
+  BucketRequestedFunction:
     Type: AWS::Serverless::Function
     Metadata:
       DockerContext: .
-      Dockerfile: Dockerfile.bucket-created
-      DockerTag: !Sub "${AWS::StackName}-bucket-created"
+      Dockerfile: Dockerfile.bucket-requested # SAM CLI not respecting build args
+      DockerTag: !Sub "${AWS::StackName}-bucket-requested"
+      BuildArgs:
+        FUNCTION_NAME: bucket-requested
     Properties:
       Architectures:
         - x86_64
-      Description: DuraCloud function that processes bucket created events
+      Description: DuraCloud function that processes bucket requested events
       Environment:
         Variables:
           BUCKET_PREFIX: !Sub "${AWS::StackName}"
@@ -31,32 +90,22 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - s3:CreateBucket
+                - s3:GetObject
                 # Basic bucket policy and tagging
-                - s3:GetBucketTagging
                 - s3:PutBucketTagging
-                - s3:GetBucketPolicy
                 - s3:PutBucketPolicy
                 # EventBridge notifications
-                - s3:GetBucketNotificationConfiguration
                 - s3:PutBucketNotificationConfiguration
                 # Inventory configuration
-                - s3:GetBucketInventoryConfiguration
                 - s3:PutBucketInventoryConfiguration
-                - s3:ListBucketInventoryConfigurations
-                - s3:DeleteBucketInventoryConfiguration
                 # Public access settings
-                - s3:GetBucketPublicAccessBlock
                 - s3:PutBucketPublicAccessBlock
-                - s3:GetBucketAcl
                 - s3:PutBucketAcl
                 # Replication configuration
-                - s3:GetBucketReplication
                 - s3:PutBucketReplication
-                - s3:DeleteBucketReplication
                 # Storage tier management
-                - s3:GetBucketLifecycleConfiguration
                 - s3:PutBucketLifecycleConfiguration
-                - s3:DeleteBucketLifecycleConfiguration
               Resource: "arn:aws:s3:::*"
             - Effect: Allow
               Action:
@@ -65,39 +114,41 @@ Resources:
               Condition:
                 StringEquals:
                   "iam:PassedToService": "s3.amazonaws.com"
-      Timeout: 100
+      Timeout: 120
 
   ##### Other resources (TODO: docs for each resource)
-  CloudTrailEventLogs:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: S3CloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub "${AWS::StackName}-event-logs"
-      S3BucketName: !Ref S3CloudTrailEventLogsBucket
-      IncludeGlobalServiceEvents: false
-      IsLogging: true
-      IsMultiRegionTrail: false
-      EventSelectors:
-        - ReadWriteType: WriteOnly
-          IncludeManagementEvents: true
+# TODO: can delete if using bucket-requested
+#  CloudTrailEventLogs:
+#    Type: AWS::CloudTrail::Trail
+#    DependsOn: S3CloudTrailBucketPolicy
+#    Properties:
+#      TrailName: !Sub "${AWS::StackName}-event-logs"
+#      S3BucketName: !Ref S3CloudTrailEventLogsBucket
+#      IncludeGlobalServiceEvents: false
+#      IsLogging: true
+#      IsMultiRegionTrail: false
+#      EventSelectors:
+#        - ReadWriteType: WriteOnly
+#          IncludeManagementEvents: true
 
-  EventsBucketCreatedRule:
-    Type: AWS::Events::Rule
-    Properties:
-      EventPattern:
-        source:
-          - aws.s3
-        detail-type:
-          - AWS API Call via CloudTrail
-        detail:
-          eventSource:
-            - s3.amazonaws.com
-          eventName:
-            - CreateBucket
-      Targets:
-        - Arn: !GetAtt BucketCreatedFunction.Arn
-          Id: "S3BucketCreated"
-          RoleArn: !GetAtt IAMEventsInvokeLambdaRole.Arn
+# TODO: can delete if using bucket-requested
+#  EventsBucketCreatedRule:
+#    Type: AWS::Events::Rule
+#    Properties:
+#      EventPattern:
+#        source:
+#          - aws.s3
+#        detail-type:
+#          - AWS API Call via CloudTrail
+#        detail:
+#          eventSource:
+#            - s3.amazonaws.com
+#          eventName:
+#            - CreateBucket
+#      Targets:
+#        - Arn: !GetAtt BucketCreatedFunction.Arn
+#          Id: "S3BucketCreated"
+#          RoleArn: !GetAtt IAMEventsInvokeLambdaRole.Arn
 
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
@@ -144,7 +195,8 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource:
-                  - !GetAtt BucketCreatedFunction.Arn
+#                  - !GetAtt BucketCreatedFunction.Arn
+                  - !GetAtt BucketRequestedFunction.Arn
 
   IAMEventsInvokeSQSRole:
     Type: AWS::IAM::Role
@@ -167,6 +219,15 @@ Resources:
                   - !GetAtt SQSObjectCreated.Arn
                   - !GetAtt SQSObjectDeleted.Arn
 
+  LambdaBucketRequestInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt BucketRequestedFunction.Arn
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
+
 #  LambdaSQSObjectCreatedSource:
 #    Type: AWS::Lambda::EventSourceMapping
 #    Properties:
@@ -181,39 +242,59 @@ Resources:
 #      EventSourceArn: !GetAtt SQSObjectDeleted.Arn
 #      FunctionName: !Ref FileDeletedFunction
 
-  LogsBucketCreatedFunction:
+#  LogsBucketCreatedFunction:
+#    Type: AWS::Logs::LogGroup
+#    Properties:
+#      LogGroupName: !Sub "/aws/lambda/${BucketCreatedFunction}"
+#      RetentionInDays: 7
+
+  LogsBucketRequestedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${BucketCreatedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${BucketRequestedFunction}"
       RetentionInDays: 7
 
-  S3CloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref S3CloudTrailEventLogsBucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: "CloudTrailGetBucketAclAccessPolicy"
-            Effect: "Allow"
-            Principal:
-              Service: "cloudtrail.amazonaws.com"
-            Action: "s3:GetBucketAcl"
-            Resource: !Sub "arn:aws:s3:::${S3CloudTrailEventLogsBucket}"
-          - Sid: "CloudTrailPutObjectAccessPolicy"
-            Effect: "Allow"
-            Principal:
-              Service: "cloudtrail.amazonaws.com"
-            Action: "s3:PutObject"
-            Resource: !Sub "arn:aws:s3:::${S3CloudTrailEventLogsBucket}/*"
-            Condition:
-              StringEquals:
-                "s3:x-amz-acl": "bucket-owner-full-control"
+# TODO: can delete if using bucket-requested
+#  S3CloudTrailBucketPolicy:
+#    Type: AWS::S3::BucketPolicy
+#    Properties:
+#      Bucket: !Ref S3CloudTrailEventLogsBucket
+#      PolicyDocument:
+#        Version: "2012-10-17"
+#        Statement:
+#          - Sid: "CloudTrailGetBucketAclAccessPolicy"
+#            Effect: "Allow"
+#            Principal:
+#              Service: "cloudtrail.amazonaws.com"
+#            Action: "s3:GetBucketAcl"
+#            Resource: !Sub "arn:aws:s3:::${S3CloudTrailEventLogsBucket}"
+#          - Sid: "CloudTrailPutObjectAccessPolicy"
+#            Effect: "Allow"
+#            Principal:
+#              Service: "cloudtrail.amazonaws.com"
+#            Action: "s3:PutObject"
+#            Resource: !Sub "arn:aws:s3:::${S3CloudTrailEventLogsBucket}/*"
+#            Condition:
+#              StringEquals:
+#                "s3:x-amz-acl": "bucket-owner-full-control"
 
-  S3CloudTrailEventLogsBucket:
+  S3BucketRequestedBucket:
     Type: AWS::S3::Bucket
+    DependsOn: LambdaBucketRequestInvokePermission
     Properties:
-      BucketName: !Sub "${AWS::StackName}-event-logs"
+      BucketName: !Sub "${AWS::StackName}-bucket-requested"
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt BucketRequestedFunction.Arn
+
+# TODO: can delete if using bucket-requested
+#  S3CloudTrailEventLogsBucket:
+#    Type: AWS::S3::Bucket
+#    Properties:
+#      BucketName: !Sub "${AWS::StackName}-event-logs"
 
   S3ManagedBucket:
     Type: AWS::S3::Bucket

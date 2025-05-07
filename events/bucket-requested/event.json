@@ -1,0 +1,38 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "us-west-2",
+      "eventTime": "2025-05-07T00:43:56.808Z",
+      "eventName": "ObjectCreated:Put",
+      "userIdentity": {
+        "principalId": "AWS:AROA123456789EXAMPLE:example-session-1234567890"
+      },
+      "requestParameters": {
+        "sourceIPAddress": "192.0.2.1"
+      },
+      "responseElements": {
+        "x-amz-request-id": "EXAMPLE123456789",
+        "x-amz-id-2": "exampleAWSxAmzId2ValueWithRandomCharactersAndBase64EncodedData"
+      },
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "ExampleConfigurationId",
+        "bucket": {
+          "name": "duracloud-lyrasis-bucket-requested",
+          "ownerIdentity": {
+            "principalId": "EXAMPLE1234567890"
+          },
+          "arn": "arn:aws:s3:::duracloud-lyrasis-bucket-requested"
+        },
+        "object": {
+          "key": "create-buckets.txt",
+          "size": 22,
+          "eTag": "a1b2c3d4e5f6a7b8c9d0",
+          "sequencer": "0123456789ABCDEF01"
+        }
+      }
+    }
+  ]
+}

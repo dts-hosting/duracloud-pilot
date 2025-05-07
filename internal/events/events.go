@@ -7,9 +7,11 @@ type BucketNamer interface {
 	BucketName() string
 }
 
-func IsEventLogsBucket(b BucketNamer) bool {
-	return strings.Contains(b.BucketName(), "-event-logs")
+func IsCreateRequestBucket(b BucketNamer) bool {
+	return strings.Contains(b.BucketName(), "-bucket-requested")
 }
+
+func IsLogsBucket(b BucketNamer) bool { return strings.Contains(b.BucketName(), "-logs") }
 
 func IsManagedBucket(b BucketNamer) bool {
 	return strings.Contains(b.BucketName(), "-managed")
@@ -24,5 +26,5 @@ func IsReplicationBucket(b BucketNamer) bool {
 }
 
 func IsRestrictedBucket(b BucketNamer) bool {
-	return IsEventLogsBucket(b) || IsManagedBucket(b) || IsReplicationBucket(b)
+	return IsLogsBucket(b) || IsManagedBucket(b) || IsReplicationBucket(b)
 }

@@ -14,13 +14,18 @@ make pull # download the required docker images
 make build # prebuild images
 
 # local testing
-make invoke func=BucketCreatedFunction event=events/bucket-created/event.json
+#make invoke func=BucketCreatedFunction event=events/bucket-created/event.json
+make invoke func=BucketRequestedFunction event=events/bucket-requested/event.json
 
 # deploy
 AWS_PROFILE=duracloudexp make deploy stack=duracloud-lyrasis
 
+# test bucket creation
+AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
+
 # destroy
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-event-logs empty
+#AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-event-logs empty
+AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-bucket-requested empty
 AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
 ```
 

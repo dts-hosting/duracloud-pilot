@@ -1,5 +1,6 @@
 package events
 
+// TODO: delete if using bucket-requested
 import (
 	"encoding/json"
 	"testing"
@@ -15,58 +16,58 @@ const sampleEvent = `{
 
 func TestBucketCreatedIdentification(t *testing.T) {
 	tests := []struct {
-		name          string
-		bucketName    string
-		isEventLogs   bool
-		isManaged     bool
-		isPublic      bool
-		isReplication bool
-		isRestricted  bool
+		name            string
+		bucketName      string
+		isCreateRequest bool
+		isManaged       bool
+		isPublic        bool
+		isReplication   bool
+		isRestricted    bool
 	}{
 		{
-			name:          "Event Logs Bucket",
-			bucketName:    "example-event-logs",
-			isEventLogs:   true,
-			isManaged:     false,
-			isPublic:      false,
-			isReplication: false,
-			isRestricted:  true,
+			name:            "Create Request Bucket",
+			bucketName:      "example-bucket-requested",
+			isCreateRequest: true,
+			isManaged:       false,
+			isPublic:        false,
+			isReplication:   false,
+			isRestricted:    false,
 		},
 		{
-			name:          "Managed Bucket",
-			bucketName:    "example-managed",
-			isEventLogs:   false,
-			isManaged:     true,
-			isPublic:      false,
-			isReplication: false,
-			isRestricted:  true,
+			name:            "Managed Bucket",
+			bucketName:      "example-managed",
+			isCreateRequest: false,
+			isManaged:       true,
+			isPublic:        false,
+			isReplication:   false,
+			isRestricted:    true,
 		},
 		{
-			name:          "Public Bucket",
-			bucketName:    "example-public",
-			isEventLogs:   false,
-			isManaged:     false,
-			isPublic:      true,
-			isReplication: false,
-			isRestricted:  false,
+			name:            "Public Bucket",
+			bucketName:      "example-public",
+			isCreateRequest: false,
+			isManaged:       false,
+			isPublic:        true,
+			isReplication:   false,
+			isRestricted:    false,
 		},
 		{
-			name:          "Replication Bucket",
-			bucketName:    "example-replication",
-			isEventLogs:   false,
-			isManaged:     false,
-			isPublic:      false,
-			isReplication: true,
-			isRestricted:  true,
+			name:            "Replication Bucket",
+			bucketName:      "example-replication",
+			isCreateRequest: false,
+			isManaged:       false,
+			isPublic:        false,
+			isReplication:   true,
+			isRestricted:    true,
 		},
 		{
-			name:          "Unrestricted Bucket",
-			bucketName:    "example-unrestricted",
-			isEventLogs:   false,
-			isManaged:     false,
-			isPublic:      false,
-			isReplication: false,
-			isRestricted:  false,
+			name:            "Unrestricted Bucket",
+			bucketName:      "example-unrestricted",
+			isCreateRequest: false,
+			isManaged:       false,
+			isPublic:        false,
+			isReplication:   false,
+			isRestricted:    false,
 		},
 	}
 
@@ -75,8 +76,8 @@ func TestBucketCreatedIdentification(t *testing.T) {
 			event := &BucketCreatedEvent{}
 			event.Detail.RequestParameters.BucketName = tt.bucketName
 
-			if got := IsEventLogsBucket(event); got != tt.isEventLogs {
-				t.Errorf("IsEventLogsBucket() = %v, want %v", got, tt.isEventLogs)
+			if got := IsCreateRequestBucket(event); got != tt.isCreateRequest {
+				t.Errorf("IsCreateRequestBucket() = %v, want %v", got, tt.isCreateRequest)
 			}
 			if got := IsManagedBucket(event); got != tt.isManaged {
 				t.Errorf("IsManagedBucket() = %v, want %v", got, tt.isManaged)
