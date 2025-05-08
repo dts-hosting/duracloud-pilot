@@ -4,6 +4,11 @@ SHELL:=/bin/bash
 build: ## Build the project (images, artifacts, etc.)
 	@sam build && sam validate
 
+.PHONY: creds
+creds: ## Output the test user access key and secret
+	@aws ssm get-parameter --name "/$(stack)/iam/test/access-key-id"
+	@aws ssm get-parameter --name "/$(stack)/iam/test/secret-access-key"
+
 .PHONY: delete
 delete: ## Delete a deployed stack
 	@sam delete --stack-name $(stack)

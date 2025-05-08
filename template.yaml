@@ -59,7 +59,7 @@ Resources:
                   "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 300
 
-  ##### Other resources (TODO: docs for each resource)
+  ##### Function resources (TODO: docs for each resource)
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
@@ -183,3 +183,97 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${AWS::StackName}-object-deleted"
+
+  ##### IAM group resources
+  IAMS3UsersGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-S3Users"
+      Path: "/"
+
+  IAMS3UsersPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub "${AWS::StackName}-S3UsersPolicy"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Allow listing buckets
+          - Effect: Allow
+            Action:
+              - s3:ListAllMyBuckets
+            Resource: "*"
+          # Allow CRUD operations on buckets as the default
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:ListBucketMultipartUploads
+            Resource:
+              - "arn:aws:s3:::*"
+              - "arn:aws:s3:::*/*"
+          # Read only permissions on stack name prefixed buckets suffixed with "-managed"
+          - Effect: Deny
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-managed"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-managed/*"
+          # View only permissions on stack name prefixed buckets suffixed with "-replication"
+          - Effect: Deny
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-replication"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
+          # Deny all on stack name prefixed buckets suffixed with "-logs"
+          - Effect: Deny
+            Action:
+              - s3:*
+            Resource:
+              - "arn:aws:s3:::aws-sam-*"
+              - "arn:aws:s3:::aws-sam-*/*"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-logs"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-logs/*"
+      Groups:
+        - !Ref IAMS3UsersGroup
+
+  ##### IAM user resources
+  IAMTestUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub "${AWS::StackName}-TestUser"
+      Path: "/"
+      Groups:
+        - !Ref IAMS3UsersGroup
+
+  IAMTestUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref IAMTestUser
+      Status: Active
+
+  SSMTestUserAccessKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${AWS::StackName}/iam/test/access-key-id"
+      Description: "Access Key ID for the S3 test user"
+      Type: "String"
+      Value: !Ref IAMTestUserAccessKey
+      Tier: "Standard"
+
+  SSMTestUserSecretAccessKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${AWS::StackName}/iam/test/secret-access-key"
+      Description: "Secret Access Key for the S3 test user"
+      Type: "String" # CF does not support SecureString
+      Value: !GetAtt IAMTestUserAccessKey.SecretAccessKey
+      Tier: "Standard"

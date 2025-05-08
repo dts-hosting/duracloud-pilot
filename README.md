@@ -16,6 +16,9 @@ make build # prebuild images
 # deploy
 AWS_PROFILE=duracloudexp make deploy stack=duracloud-lyrasis
 
+# get the support user access key and secret
+AWS_PROFILE=duracloudexp make creds stack=duracloud-lyrasis
+
 # destroy
 AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-bucket-requested empty
 AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
