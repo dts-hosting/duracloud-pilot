@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
+	"duracloud/internal/helpers"
 	"encoding/json"
 	"log"
 
-	"duracloud/internal/events"
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 var awsConfig aws.Config
@@ -22,25 +24,28 @@ func init() {
 }
 
 func handler(ctx context.Context, event json.RawMessage) error {
+	s3Client := s3.NewFromConfig(awsConfig)
+	log.Printf("Using S3 client: %v", s3Client)
+
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
 		log.Printf("Failed to parse event: %v", err)
 		return err
 	}
 
-	if s3Event.IsObjectDeletedEvent() || events.IsRestrictedBucket(&s3Event) {
-		return nil
+	e := helpers.S3EventWrapper{
+		Event: &s3Event,
 	}
 
-	bucketName := s3Event.BucketName()
-	objectKey := s3Event.ObjectKey()
+	bucketName := e.BucketName()
+	objectKey := e.ObjectKey()
 	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
 
-	// download file
-	// read lines (for each line)
-	// create bucket (using stack prefix?) with configuration we need
-	// may need to wait for it for some parts?
-	// upload log to managed bucket
+	// 1. Download the file and read lines
+
+	// 2. Create bucket & replication bucket with required configuration
+
+	// 3. Upload log to managed bucket
 
 	return nil
 }

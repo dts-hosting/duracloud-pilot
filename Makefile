@@ -13,7 +13,7 @@ deploy: ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack)
 
 .PHONY: invoke
-invoke: ## Invoke a function using SAM CLI
+invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event)
 
 .PHONY: pull

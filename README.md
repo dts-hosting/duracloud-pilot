@@ -13,24 +13,34 @@ Requires:
 make pull # download the required docker images
 make build # prebuild images
 
-# local testing
-#make invoke func=BucketCreatedFunction event=events/bucket-created/event.json
-make invoke func=BucketRequestedFunction event=events/bucket-requested/event.json
-
 # deploy
 AWS_PROFILE=duracloudexp make deploy stack=duracloud-lyrasis
 
-# test bucket creation
-AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
-
 # destroy
-#AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-event-logs empty
 AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-bucket-requested empty
 AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
 ```
 
 - Setting `stack` uniquely allows for multiple deployments to the same account.
 - Created resources are prefixed with the `stack` name.
+
+## Testing functions
+
+### BucketRequestedFunction
+
+Local testing can be run using `make invoke`:
+
+```bash
+# local testing
+make invoke func=BucketRequestedFunction event=events/bucket-requested/event.json
+```
+
+This can be used to test incoming event payloads.
+
+```bash
+# trigger: test bucket creation
+AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
+```
 
 ## Utility scripts
 
