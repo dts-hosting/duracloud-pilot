@@ -60,6 +60,33 @@ Resources:
       Timeout: 300
 
   ##### Function resources (TODO: docs for each resource)
+  DynamoDBChecksumTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-checksum-table"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: ObjectId
+          AttributeType: S
+        - AttributeName: ChecksumPurpose
+          AttributeType: S
+        - AttributeName: LastChecksumDate
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ObjectId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: ChecksumDateIndex
+          KeySchema:
+            - AttributeName: ChecksumPurpose
+              KeyType: HASH
+            - AttributeName: LastChecksumDate
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
