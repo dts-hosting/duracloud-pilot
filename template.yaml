@@ -164,6 +164,13 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
 
+#  LambdaSQSFixityCheckerSource:
+#    Type: AWS::Lambda::EventSourceMapping
+#    Properties:
+#      BatchSize: 10
+#      EventSourceArn: !GetAtt SQSFixityChecker.Arn
+#      FunctionName: !Ref FixityCheckerFunction
+
 #  LambdaSQSObjectCreatedSource:
 #    Type: AWS::Lambda::EventSourceMapping
 #    Properties:
@@ -200,6 +207,11 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
+
+  SQSFixityChecker:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-fixity-checker"
 
   SQSObjectCreated:
     Type: AWS::SQS::Queue
