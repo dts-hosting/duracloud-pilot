@@ -54,7 +54,7 @@ func GetRecordsNeedingVerification(ctx context.Context, client *dynamodb.Client,
 
 // ProcessChecksumVerifications passes records to a processor function
 // The processor function is called for each record that needs verification
-// which can then be processed inline or pushed to a queue to hand-off
+// which can then be processed inline or handed-off to a queue etc.
 func ProcessChecksumVerifications(
 	ctx context.Context,
 	dynamoClient *dynamodb.Client,
