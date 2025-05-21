@@ -211,27 +211,10 @@ Resources:
           - Event: s3:ObjectCreated:*
             Function: !GetAtt BucketRequestedFunction.Arn
 
-  S3LogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-logs"
-
   S3ManagedBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
-
-  # TODO: Remove after develpoment phase
-  S3ExampleReplicationBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-example-regular-bucket-replication"
-
-  # TODO: Remove after development phase
-  S3ExampleBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-example-regular-bucket"
 
   SQSFixityChecker:
     Type: AWS::SQS::Queue
