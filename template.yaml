@@ -66,15 +66,19 @@ Resources:
       TableName: !Sub "${AWS::StackName}-checksum-table"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: ObjectId
+        - AttributeName: Bucket
+          AttributeType: S
+        - AttributeName: Object
           AttributeType: S
         - AttributeName: ChecksumPurpose
           AttributeType: S
         - AttributeName: LastChecksumDate
           AttributeType: S
       KeySchema:
-        - AttributeName: ObjectId
+        - AttributeName: Bucket
           KeyType: HASH
+        - AttributeName: Object
+          KeyType: RANGE
       GlobalSecondaryIndexes:
         - IndexName: ChecksumDateIndex
           KeySchema:
