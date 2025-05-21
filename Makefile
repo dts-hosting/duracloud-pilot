@@ -14,7 +14,7 @@ delete: ## Delete a deployed stack
 	@sam delete --stack-name $(stack)
 
 .PHONY: deploy
-deploy: ## Deploy stack to AWS
+deploy: build ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack)
 
 .PHONY: invoke

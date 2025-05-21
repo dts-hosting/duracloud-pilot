@@ -4,6 +4,7 @@ import "strings"
 
 const (
 	IsBucketRequestedSuffix = "-bucket-requested"
+	IsDuraCloudPrefix       = "duracloud-"
 	IsLogsSuffix            = "-logs"
 	IsManagedSuffix         = "-managed"
 	IsPublicSuffix          = "-public"
@@ -17,6 +18,10 @@ func IsBucketRequestBucket(name string) bool {
 // IsIgnoreFilesBucket buckets excluded from checksum processing
 func IsIgnoreFilesBucket(name string) bool {
 	return IsBucketRequestBucket(name) || IsRestrictedBucket(name)
+}
+
+func IsDuraCloudBucket(name string) bool {
+	return strings.HasPrefix(name, IsDuraCloudPrefix)
 }
 
 func IsLogsBucket(name string) bool {
