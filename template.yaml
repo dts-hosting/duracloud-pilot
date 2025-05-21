@@ -280,7 +280,7 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::${AWS::StackName}*-replication"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
-          # Deny all on aws-sam and stack name prefixed buckets suffixed with "-logs"
+          # Deny all on stack name prefixed buckets suffixed with "-logs"
           - Effect: Deny
             Action:
               - s3:*
