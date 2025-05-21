@@ -95,6 +95,10 @@ Resources:
           - aws.s3
         detail-type:
           - "Object Created"
+        detail:
+          bucket:
+            name:
+              - prefix: !Sub "${AWS::StackName}"
       Targets:
         - Arn: !GetAtt SQSObjectCreated.Arn
           Id: "SendToSQSOnCreate"
@@ -108,6 +112,10 @@ Resources:
           - aws.s3
         detail-type:
           - "Object Deleted"
+        detail:
+          bucket:
+            name:
+              - prefix: !Sub "${AWS::StackName}"
       Targets:
         - Arn: !GetAtt SQSObjectDeleted.Arn
           Id: "SendToSQSOnDelete"
@@ -242,7 +250,7 @@ Resources:
             Action:
               - s3:ListAllMyBuckets
             Resource: "*"
-          # Allow CRUD operations on buckets as the default
+          # Allow CRUD operations on stack name prefixed buckets as the default
           - Effect: Allow
             Action:
               - s3:ListBucket
@@ -253,8 +261,8 @@ Resources:
               - s3:ListMultipartUploadParts
               - s3:ListBucketMultipartUploads
             Resource:
-              - "arn:aws:s3:::*"
-              - "arn:aws:s3:::*/*"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*/*"
           # Read only permissions on stack name prefixed buckets suffixed with "-managed"
           - Effect: Deny
             Action:
@@ -272,13 +280,11 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::${AWS::StackName}*-replication"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
-          # Deny all on stack name prefixed buckets suffixed with "-logs"
+          # Deny all on aws-sam and stack name prefixed buckets suffixed with "-logs"
           - Effect: Deny
             Action:
               - s3:*
             Resource:
-              - "arn:aws:s3:::aws-sam-*"
-              - "arn:aws:s3:::aws-sam-*/*"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-logs"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-logs/*"
       Groups:

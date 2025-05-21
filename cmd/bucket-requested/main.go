@@ -5,6 +5,7 @@ import (
 	"duracloud/internal/helpers"
 	"encoding/json"
 	"log"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -26,6 +27,9 @@ func init() {
 func handler(ctx context.Context, event json.RawMessage) error {
 	s3Client := s3.NewFromConfig(awsConfig)
 	log.Printf("Using S3 client: %v", s3Client)
+
+	bucketPrefix := os.Getenv("BUCKET_PREFIX")
+	log.Printf("Using bucket prefix: %s", bucketPrefix)
 
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
