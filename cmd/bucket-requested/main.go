@@ -28,7 +28,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	s3Client := s3.NewFromConfig(awsConfig)
 	log.Printf("Using S3 client: %v", s3Client)
 
-	bucketPrefix := os.Getenv("BUCKET_PREFIX")
+	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
 	log.Printf("Using bucket prefix: %s", bucketPrefix)
 
 	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
