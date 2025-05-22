@@ -221,18 +221,6 @@ Resources:
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
 
-  # TODO: Remove after develpoment phase
-  S3ExampleReplicationBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-example-regular-bucket-replication"
-
-  # TODO: Remove after development phase
-  S3ExampleBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-example-regular-bucket"
-
   SQSFixityChecker:
     Type: AWS::SQS::Queue
     Properties:
