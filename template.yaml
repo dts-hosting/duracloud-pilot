@@ -25,7 +25,9 @@ Resources:
       Description: DuraCloud function that processes bucket requested events
       Environment:
         Variables:
-          BUCKET_PREFIX: !Sub "${AWS::StackName}"
+          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
+          S3_INVENTORY_DEST_BUCKET: !Ref S3ManagedBucket
+          S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
       MemorySize: 128
       PackageType: Image
       Policies:
@@ -66,15 +68,19 @@ Resources:
       TableName: !Sub "${AWS::StackName}-checksum-table"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: ObjectId
+        - AttributeName: Bucket
+          AttributeType: S
+        - AttributeName: Object
           AttributeType: S
         - AttributeName: ChecksumPurpose
           AttributeType: S
         - AttributeName: LastChecksumDate
           AttributeType: S
       KeySchema:
-        - AttributeName: ObjectId
+        - AttributeName: Bucket
           KeyType: HASH
+        - AttributeName: Object
+          KeyType: RANGE
       GlobalSecondaryIndexes:
         - IndexName: ChecksumDateIndex
           KeySchema:
@@ -145,6 +151,7 @@ Resources:
   IAMEventsInvokeSQSRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${AWS::StackName}-invoke-sqs-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -162,6 +169,44 @@ Resources:
                 Resource:
                   - !GetAtt SQSObjectCreated.Arn
                   - !GetAtt SQSObjectDeleted.Arn
+
+  IAMS3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-s3-replication-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-s3-replication-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetReplicationConfiguration
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                Resource:
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersionTagging
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                  - s3:ReplicateTags
+                Resource:
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
 
   LambdaBucketRequestInvokePermission:
     Type: AWS::Lambda::Permission
@@ -215,6 +260,26 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
+
+  S3ManagedBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3ManagedBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "AllowInventoryDestination"
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed/inventory/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": bucket-owner-full-control
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
 
   SQSFixityChecker:
     Type: AWS::SQS::Queue
