@@ -256,6 +256,11 @@ Resources:
           - Event: s3:ObjectCreated:*
             Function: !GetAtt BucketRequestedFunction.Arn
 
+  S3LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-logs"
+
   S3ManagedBucket:
     Type: AWS::S3::Bucket
     Properties:
