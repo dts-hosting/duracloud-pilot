@@ -26,6 +26,7 @@ Resources:
       Environment:
         Variables:
           BUCKET_PREFIX: !Sub "${AWS::StackName}"
+          S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
       MemorySize: 128
       PackageType: Image
       Policies:
@@ -149,6 +150,7 @@ Resources:
   IAMEventsInvokeSQSRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${AWS::StackName}-invoke-sqs-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -166,6 +168,44 @@ Resources:
                 Resource:
                   - !GetAtt SQSObjectCreated.Arn
                   - !GetAtt SQSObjectDeleted.Arn
+
+  IAMS3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-s3-replication-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "${AWS::StackName}-s3-replication-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetReplicationConfiguration
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                Resource:
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*/*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersionTagging
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                  - s3:ReplicateTags
+                Resource:
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
 
   LambdaBucketRequestInvokePermission:
     Type: AWS::Lambda::Permission

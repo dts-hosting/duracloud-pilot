@@ -31,6 +31,9 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	bucketPrefix := os.Getenv("BUCKET_PREFIX")
 	log.Printf("Using bucket prefix: %s", bucketPrefix)
 
+	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
+	log.Printf("Using replication role ARN: %s", replicationRoleArn)
+
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
 		log.Printf("Failed to parse event: %v", err)
