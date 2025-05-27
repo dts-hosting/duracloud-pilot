@@ -7,9 +7,11 @@ import (
 	"strings"
 	"bufio"
 	"log"
+	"fmt"
 	"os"
 	"io"
 	"strconv"
+	"regexp"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -44,6 +46,14 @@ func getMaxBuckets() int {
 	return maxBuckets
 }
 
+func validateBucketName(bucketName string) bool {
+	var (
+		whitelist = "a-zA-Z0-9-"
+		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
+	)
+	return !disallowed.MatchString(bucketName)
+}
+
 func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 	var buckets []string
 
@@ -72,7 +82,12 @@ func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		log.Printf("Reading bucket name: ", line)
-		buckets = append(buckets, line)
+		if validateBucketName(line) {
+			buckets = append(buckets, line)
+		} else {
+			log.Fatalf("invalid bucket name requested: %v", line)
+			return nil
+		}
 	}
 
 	var maxBuckets = getMaxBuckets()
