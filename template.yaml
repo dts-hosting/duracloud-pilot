@@ -14,11 +14,11 @@ Resources:
   BucketRequestedFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      DockerContext: .
-      Dockerfile: Dockerfile.bucket-requested # SAM CLI not respecting build args
-      DockerTag: !Sub "${AWS::StackName}-bucket-requested"
-      BuildArgs:
+      DockerBuildArgs:
         FUNCTION_NAME: bucket-requested
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-bucket-requested"
     Properties:
       Architectures:
         - x86_64
