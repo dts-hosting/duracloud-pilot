@@ -24,6 +24,7 @@ func init() {
 }
 
 func handler(ctx context.Context, event json.RawMessage) error {
+
 	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
 	log.Printf("Using bucket prefix: %s", bucketPrefix)
 
@@ -44,7 +45,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	objectKey := e.ObjectKey()
 	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
 
-	buckets := helpers.GetBuckets(ctx, s3Client, bucketName, objectKey)
+	buckets := getBuckets(ctx, bucketName, objectKey)
 	log.Printf("Retrieved %d buckets list from request file", len(buckets))
 
 	// Do all the things ...
