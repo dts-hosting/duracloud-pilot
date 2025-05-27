@@ -53,6 +53,11 @@ lint: ## Run linters
 logs: ## Output logs to console
 	@./scripts/output-logs.sh $(func) $(stack) $(interval)
 
+.PHONY: lint
+lint: ## Run go linters
+	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
+	@gofmt -w .
+
 .PHONY: pull
 pull: ## Pull required docker images
 	@docker pull public.ecr.aws/docker/library/golang:1.24
