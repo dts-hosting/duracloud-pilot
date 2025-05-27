@@ -24,7 +24,7 @@ var awsConfig aws.Config
 
 func init() {
 	var err error
-	awsConfig, err = config.LoadDefaultConfig(context.Background())
+	awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 	if err != nil {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
@@ -65,14 +65,14 @@ func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 	})
 
 	if err != nil {
-		log.Fatalf("failed to get object: %w", err)
+		log.Fatalf("failed to get object: %s from %s due to %s", key, bucket, err)
 		return nil
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("failed to read body: %w", err)
+		log.Fatalf("failed to read body: %s", err)
 		return nil
 	}
 
@@ -85,7 +85,7 @@ func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 		if validateBucketName(line) {
 			buckets = append(buckets, line)
 		} else {
-			log.Fatalf("invalid bucket name requested: %v", line)
+			log.Fatalf("invalid bucket name requested: %s", line)
 			return nil
 		}
 	}
@@ -129,7 +129,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
 
 	buckets := getBuckets(ctx, bucketName, objectKey)
-	log.Printf("Retrieved %v buckets list from request file", len(buckets))
+	log.Printf("Retrieved %s buckets list from request file", len(buckets))
 
 	// 2. Create bucket & replication bucket with required configuration
 
