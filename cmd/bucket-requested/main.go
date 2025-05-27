@@ -1,39 +1,30 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"duracloud/internal/helpers"
 	"encoding/json"
-	"strings"
-	"bufio"
-	"log"
 	"fmt"
-	"os"
-	"io"
-	"strconv"
-	"regexp"
-
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"log"
+	"os"
+	"regexp"
+	"strconv"
 )
 
-var awsConfig aws.Config
+var s3Client *s3.Client
 
 func init() {
-	var err error
-	awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
+	awsConfig, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
-}
-
-func getS3Client() *s3.Client {
-	s3Client := s3.NewFromConfig(awsConfig)
-	log.Printf("Using S3 client: %v", s3Client)
-	return s3Client
+	s3Client = s3.NewFromConfig(awsConfig)
 }
 
 func getMaxBuckets() int {
@@ -48,18 +39,17 @@ func getMaxBuckets() int {
 
 func validateBucketName(bucketName string) bool {
 	var (
-		whitelist = "a-zA-Z0-9-"
+		whitelist  = "a-zA-Z0-9-"
 		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
 	)
 	return !disallowed.MatchString(bucketName)
 }
 
-func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
+// getBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
+func getBuckets(ctx context.Context, bucket string, key string) []string {
 	var buckets []string
 
-	client := getS3Client()
-
-	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
+	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
@@ -70,18 +60,11 @@ func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalf("failed to read body: %s", err)
-		return nil
-	}
-
-	reader := strings.NewReader(string(body))
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(resp.Body)
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		log.Printf("Reading bucket name: ", line)
+		log.Printf("Reading bucket name: %s", line)
 		if validateBucketName(line) {
 			buckets = append(buckets, line)
 		} else {
@@ -90,16 +73,17 @@ func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Error reading response: %v", err)
+		return nil
+	}
+
+	// TODO: do we want to error like this or ignore extras (i.e. don't append additional buckets above)?
 	var maxBuckets = getMaxBuckets()
 	bucketsRequested := len(buckets)
 	if bucketsRequested >= maxBuckets {
 		log.Fatalf("Exceeded maximum allowed buckets per request [%s] with [%s]",
-										maxBuckets, bucketsRequested)
-		return nil
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("Error reading string:", err)
+			maxBuckets, bucketsRequested)
 		return nil
 	}
 
@@ -107,7 +91,6 @@ func getBuckets(ctx context.Context, bucket string, key string) ([]string) {
 }
 
 func handler(ctx context.Context, event json.RawMessage) error {
-
 	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
 	log.Printf("Using bucket prefix: %s", bucketPrefix)
 
@@ -129,11 +112,9 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
 
 	buckets := getBuckets(ctx, bucketName, objectKey)
-	log.Printf("Retrieved %s buckets list from request file", len(buckets))
+	log.Printf("Retrieved %d buckets list from request file", len(buckets))
 
-	// 2. Create bucket & replication bucket with required configuration
-
-	// 3. Upload log to managed bucket
+	// Do all the things ...
 
 	return nil
 }
