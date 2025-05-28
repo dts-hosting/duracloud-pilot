@@ -21,6 +21,11 @@ deploy: build ## Deploy stack to AWS
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event)
 
+.PHONY: lint
+lint: ## Run go linters
+	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
+	@gofmt -w .
+
 .PHONY: pull
 pull: ## Pull required docker images
 	@docker pull public.ecr.aws/docker/library/golang:1.24
