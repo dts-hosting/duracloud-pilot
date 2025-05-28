@@ -1,4 +1,5 @@
 #!/bin/bash
+# scripts/bucket-manager.sh - Script to create, empty or delete buckets
 
 BUCKET_NAME=$1
 ACTION=$2
