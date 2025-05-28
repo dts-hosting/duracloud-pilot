@@ -16,6 +16,7 @@ var s3Client *s3.Client
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
+	//awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 	if err != nil {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
