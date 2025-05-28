@@ -1,5 +1,7 @@
 package helpers
 
+import "fmt"
+import "regexp"
 import "strings"
 
 const (
@@ -44,3 +46,13 @@ func IsReplicationBucket(name string) bool {
 func IsRestrictedBucket(name string) bool {
 	return IsLogsBucket(name) || IsManagedBucket(name) || IsReplicationBucket(name)
 }
+
+func ValidateBucketName(name string) bool {
+	var (
+		whitelist  = "a-zA-Z0-9-"
+		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
+	)
+	return !disallowed.MatchString(name)
+}
+
+

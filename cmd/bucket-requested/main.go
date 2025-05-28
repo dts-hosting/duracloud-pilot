@@ -5,7 +5,6 @@ import (
 	"context"
 	"duracloud/internal/helpers"
 	"encoding/json"
-	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"log"
 	"os"
-	"regexp"
 	"strconv"
 )
 
@@ -37,14 +35,6 @@ func getMaxBuckets() int {
 	return maxBuckets
 }
 
-func validateBucketName(bucketName string) bool {
-	var (
-		whitelist  = "a-zA-Z0-9-"
-		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
-	)
-	return !disallowed.MatchString(bucketName)
-}
-
 // getBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
 func getBuckets(ctx context.Context, bucket string, key string) []string {
 	var buckets []string
@@ -65,7 +55,7 @@ func getBuckets(ctx context.Context, bucket string, key string) []string {
 	for scanner.Scan() {
 		line := scanner.Text()
 		log.Printf("Reading bucket name: %s", line)
-		if validateBucketName(line) {
+		if helpers.ValidateBucketName(line) {
 			buckets = append(buckets, line)
 		} else {
 			log.Fatalf("invalid bucket name requested: %s", line)
