@@ -9,6 +9,15 @@ Globals:
     LoggingConfig:
       LogFormat: JSON
 
+Parameters:
+  BucketRequestedImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image URI for Bucket Requested function (leave empty for local build)"
+
+Conditions:
+  UseExternalImage: !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
+
 Resources:
   ##### Functions
   BucketRequestedFunction:
@@ -28,6 +37,7 @@ Resources:
           S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
           S3_INVENTORY_DEST_BUCKET: !Ref S3ManagedBucket
           S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
+      ImageUri: !If [UseExternalImage, !Ref BucketRequestedImageUri, !Ref "AWS::NoValue"]
       MemorySize: 128
       PackageType: Image
       Policies:
