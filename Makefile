@@ -1,8 +1,18 @@
 SHELL:=/bin/bash
 
+ARCH:=$(shell uname -m)
+
+ifeq ($(ARCH),x86_64)
+    LAMBDA_ARCH:=x86_64
+else ifeq ($(ARCH),arm64)
+    LAMBDA_ARCH:=arm64
+else
+    $(error Unsupported architecture $(ARCH))
+endif
+
 .PHONY: build
 build: ## Build the project (images, artifacts, etc.)
-	@sam build && sam validate
+	@sam build --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH) && sam validate
 
 .PHONY: creds
 creds: ## Output the test user access key and secret
@@ -15,19 +25,11 @@ delete: ## Delete a deployed stack
 
 .PHONY: deploy
 deploy: build ## Deploy stack to AWS
-	@sam deploy --stack-name $(stack)
-
-.PHONY: docker-build
-docker-build: ## Build DuraCloud docker images
-	@docker build --build-arg FUNCTION_NAME=bucket-requested -t docker.io/duracloud/bucket-requested:latest .
-
-.PHONY: docker-push
-docker-push: ## Push DuraCloud docker images
-	@docker push docker.io/duracloud/bucket-requested:latest
+	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
-	@sam local invoke $(func) --event $(event)
+	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: lint
 lint: ## Run go linters

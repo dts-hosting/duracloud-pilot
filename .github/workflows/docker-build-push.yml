@@ -6,6 +6,13 @@ on:
       - main
     tags:
       - 'v*'
+    paths:
+      - 'Dockerfile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/docker_build_push.yml'
+      - 'cmd/**'
+      - 'internal/**'
 
 env:
   DOCKER_REGISTRY: docker.io

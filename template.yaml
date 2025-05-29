@@ -14,6 +14,12 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image URI for Bucket Requested function (leave empty for local build)"
+  LambdaArchitecture:
+    Type: String
+    AllowedValues:
+      - arm64
+      - x86_64
+    Description: Architecture for Lambda functions
 
 Conditions:
   UseExternalImage: !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
@@ -30,7 +36,7 @@ Resources:
       DockerTag: !Sub "${AWS::StackName}-bucket-requested"
     Properties:
       Architectures:
-        - x86_64
+        - !Ref LambdaArchitecture
       Description: DuraCloud function that processes bucket requested events
       Environment:
         Variables:
