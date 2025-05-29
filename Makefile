@@ -17,6 +17,14 @@ delete: ## Delete a deployed stack
 deploy: build ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack)
 
+.PHONY: docker-build
+docker-build: ## Build DuraCloud docker images
+	@docker build --build-arg FUNCTION_NAME=bucket-requested -t docker.io/duracloud/bucket-requested:latest .
+
+.PHONY: docker-push
+docker-push: ## Push DuraCloud docker images
+	@docker push docker.io/duracloud/bucket-requested:latest
+
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event)
