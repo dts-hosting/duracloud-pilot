@@ -6,5 +6,8 @@
 .vscode/settings.json
 *.html
 dist
+docs/
+docs-src/dist/
+docs-src/node_modules/
 example
 node_modules

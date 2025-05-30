@@ -27,6 +27,18 @@ delete: ## Delete a deployed stack
 deploy: build ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
+.PHONY: docs-build
+docs-build: ## Build the docs site
+	@cd docs-src && npm run build
+
+.PHONY: docs-dev
+docs-dev: ## Start the docs dev server
+	@cd docs-src && npm run dev
+
+.PHONY: docs-install
+docs-install: ## Install docs dependencies
+	@cd docs-src && npm install
+
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
