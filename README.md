@@ -13,6 +13,15 @@ To view logs install `saw` (using Go is recommended):
 go install github.com/TylerBrock/saw@latest
 ```
 
+The docs site requires [Node.js](https://nodejs.org/en). Install using `nvm`:
+
+- [nvm](https://github.com/nvm-sh/nvm)
+
+```bash
+nvm use
+make docs-install
+```
+
 ## Usage
 
 ```bash

@@ -1,0 +1,36 @@
+---
+title: Introduction
+---
+
+
+import {Aside, LinkCard} from '@astrojs/starlight/components';
+
+DuraCloud is a set of additions to [Amazon S3](https://aws.amazon.com/s3/) storage,
+deployed within an AWS account, to help fulfill preservation goals.
+
+It is intended to be a very simple service for the end user that configures advanced
+features automatically with no expert knowledge of AWS or S3 required. This enables
+the user, who only wants to upload files, to feel confident that those files are
+being stored resiliently.
+
+<Aside type="caution">This documentation is for the unreleased pilot implementation of DuraCloud.</Aside>
+
+<LinkCard
+    title="Why DuraCloud?"
+    href="/about/background"
+    description="Read more about the motivation behind DuraCloud."
+/>
+
+## Documentation
+
+<LinkCard
+    title="User manual"
+    href="/guides/user"
+    description="This is for end users who will be uploading files."
+/>
+
+<LinkCard
+    title="Technical documentation"
+    href="/guides/technical"
+    description="This is for developers and anyone deploying DuraCloud."
+/>

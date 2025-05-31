@@ -5,10 +5,10 @@ on:
     branches:
       - main
     paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/go-lint.yml'
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/go-lint.yml"
 
 permissions:
   contents: read
