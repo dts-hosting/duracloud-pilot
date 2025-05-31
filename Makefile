@@ -37,16 +37,17 @@ docs-dev: ## Start the docs dev server
 
 .PHONY: docs-install
 docs-install: ## Install docs dependencies
-	@cd docs-src && npm install
+	@npm install && cd docs-src && npm install
 
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: lint
-lint: ## Run go linters
+lint: ## Run linters
 	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
 	@gofmt -w .
+	@npm run format
 
 .PHONY: logs
 logs: ## Output logs to console
