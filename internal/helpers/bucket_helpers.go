@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"encoding/json"
 	"log"
 	"os"
 	"regexp"
@@ -75,10 +77,10 @@ func GetBucketRequestLimit(ctx context.Context) int {
 }
 
 // getBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
-func GetBuckets(ctx context.Context, client *s3.Client, bucket string, key string) []string {
+func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string) []string {
 	var buckets []string
 
-	resp, err := client.GetObject(ctx, &s3.GetObjectInput{
+	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
@@ -119,4 +121,52 @@ func GetBuckets(ctx context.Context, client *s3.Client, bucket string, key strin
 	return buckets
 }
 
+// getBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
+func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, bucketPrefix string) {
 
+	fullBucketName := fmt.Sprintf("%s-%s", bucketPrefix, bucketName)
+	log.Printf("Creating bucket  %v", fullBucketName)
+	region := os.Getenv("AWS_REGION") 
+	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(fullBucketName),
+		CreateBucketConfiguration: &types.CreateBucketConfiguration{
+            LocationConstraint: types.BucketLocationConstraint(region),
+        },
+	})
+	if err != nil {
+		log.Fatalf("failed to create bucket: %v", err)
+	}
+
+	// apply a default deny-all policy
+	policy := map[string]interface{}{
+        "Version": "2012-10-17",
+        "Statement": []map[string]interface{}{
+            {
+                "Effect":   "Deny",
+                "Principal": "*",
+                "Action":   "*",
+                "Resource": fmt.Sprintf("arn:aws:s3:::%s/*", fullBucketName),
+            },
+            {
+                "Effect":   "Deny",
+                "Principal": "*",
+                "Action":   "*",
+                "Resource": fmt.Sprintf("arn:aws:s3:::%s", fullBucketName),
+            },
+        },
+    }
+
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+        log.Fatalf("failed to marshal policy: %v", err)
+    }
+
+    // 3. Apply the policy
+    _, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
+        Bucket: aws.String(fullBucketName),
+        Policy: aws.String(string(policyJSON)),
+    })
+    if err != nil {
+        log.Fatalf("failed to put bucket policy: %v", err)
+    }
+}

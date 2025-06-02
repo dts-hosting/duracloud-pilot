@@ -16,7 +16,6 @@ var s3Client *s3.Client
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
-	//awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
 	if err != nil {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
@@ -45,10 +44,15 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	objectKey := e.ObjectKey()
 	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
 
-	buckets := helpers.GetBuckets(ctx, s3Client, bucketName, objectKey)
-	log.Printf("Retrieved %d buckets list from request file", len(buckets))
+	requestedBuckets := helpers.GetBuckets(ctx, s3Client, bucketName, objectKey)
+	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
 	// Do all the things ...
+
+	// Create new buckets 
+	for _, requestedBucketName := range requestedBuckets {
+		helpers.CreateBucket(ctx, s3Client, requestedBucketName, bucketPrefix)
+	}
 
 	return nil
 }
