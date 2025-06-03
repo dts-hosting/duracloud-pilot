@@ -62,6 +62,8 @@ Resources:
                 # Basic bucket policy and tagging
                 - s3:PutBucketTagging
                 - s3:PutBucketPolicy
+                # Bucket Versioning
+                - s3:PutBucketVersioning
                 # EventBridge notifications
                 - s3:PutBucketNotificationConfiguration
                 # Inventory configuration
