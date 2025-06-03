@@ -64,6 +64,8 @@ Resources:
                 - s3:PutBucketPolicy
                 # Bucket Versioning
                 - s3:PutBucketVersioning
+                # Bucket Lifecycle Configuration
+                - s3:PutLifecycleConfiguration
                 # EventBridge notifications
                 - s3:PutBucketNotificationConfiguration
                 # Inventory configuration
