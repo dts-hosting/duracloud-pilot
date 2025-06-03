@@ -17,7 +17,7 @@ export default defineConfig({
       },
       favicon: "/favicon.ico",
       logo: {
-        src: "./src/assets/duracloud-icon.png",
+        src: "./src/assets/lyrasis-duracloud-logo.png",
       },
       sidebar: [
         { slug: "index", label: "Introduction" },
