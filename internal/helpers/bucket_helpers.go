@@ -201,4 +201,26 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 	}
 	fmt.Println("Bucket versioning enabled.")
 
+
+	days := int32(7)
+	fmt.Printf("Bucket Non-current expiration being set to %d days", days)
+	_, err = s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
+		Bucket: aws.String(fullBucketName),
+		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
+			Rules: []types.LifecycleRule{
+				{
+					ID: aws.String("ExpireOldVersionsAfter7Days"),
+					Status: types.ExpirationStatusEnabled,
+					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")}, // Applies to all objects
+					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
+						NoncurrentDays: &days,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		log.Fatalf("failed to set lifecycle rule: %v", err)
+	}
+	fmt.Println("Lifecycle rule set: Non-current versions expire after 7 days.")
 }
