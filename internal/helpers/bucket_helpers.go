@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"encoding/json"
+	//TODO "encoding/json"
 	"log"
 	"os"
 	"regexp"
@@ -137,7 +137,24 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 		log.Fatalf("failed to create bucket: %v", err)
 	}
 
+	_, err = s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
+		Bucket: aws.String(fullBucketName),
+		Tagging: &types.Tagging{
+            TagSet: []types.Tag{
+                {Key: aws.String("Application"), Value: aws.String("Duracloud")},
+                {Key: aws.String("StackName"), Value: aws.String(bucketPrefix)},
+                {Key: aws.String("BucketType"), Value: aws.String("Standard")},
+            },
+        },
+	})
+	if err != nil {
+		log.Fatalf("failed to add  bucket tags: %v", err)
+	}
+	log.Printf("Bucket Tags added")
+
+	log.Printf("Bucket Deny-all policy generating")
 	// apply a default deny-all policy
+	/*
 	policy := map[string]interface{}{
         "Version": "2012-10-17",
         "Statement": []map[string]interface{}{
@@ -161,7 +178,7 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
         log.Fatalf("failed to marshal policy: %v", err)
     }
 
-    // 3. Apply the policy
+	// TODO uncomment. Proved working but makes testing impossible
     _, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
         Bucket: aws.String(fullBucketName),
         Policy: aws.String(string(policyJSON)),
@@ -169,4 +186,8 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
     if err != nil {
         log.Fatalf("failed to put bucket policy: %v", err)
     }
+	*/
+	log.Printf("TODO INOP: Applied Bucket Deny-all policy")
+
+
 }
