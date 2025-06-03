@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	//TODO "encoding/json"
+	"encoding/json"
 	"log"
 	"os"
 	"regexp"
@@ -223,4 +223,51 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 		log.Fatalf("failed to set lifecycle rule: %v", err)
 	}
 	fmt.Println("Lifecycle rule set: Non-current versions expire after 7 days.")
+
+	if IsPublicBucket(bucketName) {
+		log.Printf("Public Bucket detected")
+		blockFalse := false
+		_, err := s3Client.PutPublicAccessBlock(ctx, &s3.PutPublicAccessBlockInput{
+			Bucket: aws.String(fullBucketName),
+			PublicAccessBlockConfiguration: &types.PublicAccessBlockConfiguration{
+				BlockPublicAcls:       &blockFalse,
+				IgnorePublicAcls:      &blockFalse,
+				BlockPublicPolicy:     &blockFalse,
+				RestrictPublicBuckets: &blockFalse,
+			},
+		})
+		if err != nil {
+			log.Fatalf("failed to disable public access block: %v", err)
+		}
+		fmt.Println("Public access block disabled.")
+
+
+		policy := map[string]interface{}{
+			"Version": "2012-10-17",
+			"Statement": []map[string]interface{}{
+				{
+					"Sid":       "AllowPublicRead",
+					"Effect":    "Allow",
+					"Principal": "*",
+					"Action":    "s3:GetObject",
+					"Resource":  fmt.Sprintf("arn:aws:s3:::%s/*", fullBucketName),
+				},
+			},
+		}
+
+		policyJSON, err := json.Marshal(policy)
+		if err != nil {
+			log.Fatalf("failed to marshal bucket policy: %v", err)
+		}
+
+		_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
+			Bucket: aws.String(fullBucketName),
+			Policy: aws.String(string(policyJSON)),
+		})
+		if err != nil {
+			log.Fatalf("failed to apply public bucket policy: %v", err)
+		}
+		fmt.Println("Public bucket policy applied.")
+	}
+
 }
