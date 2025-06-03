@@ -189,5 +189,16 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 	*/
 	log.Printf("TODO INOP: Applied Bucket Deny-all policy")
 
+	log.Printf("Enable Bucket versioning")
+	_, err = s3Client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(fullBucketName),
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
+		},
+	})
+	if err != nil {
+		log.Fatalf("failed to enable versioning: %v", err)
+	}
+	fmt.Println("Bucket versioning enabled.")
 
 }
