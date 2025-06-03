@@ -1,16 +1,26 @@
 #!/bin/bash
-# scripts/bucket-manager.sh - Script to create, empty or delete buckets
+# scripts/bucket-manager.sh - Script to list, create, empty or delete buckets
 
-BUCKET_NAME=$1
-ACTION=$2
+ACTION=$1
+BUCKET_NAME=$2
 
-if [ -z "$BUCKET_NAME" ] || [ -z "$ACTION" ]; then
-    echo "Usage: $0 <bucket-name> <action>"
-    echo "Actions: create, empty, delete"
+if [ -z "$ACTION" ]; then
+    echo "Usage: $0 <action> [bucket-name]"
+    echo "Actions: list, create, empty, delete"
+    echo "Note: bucket-name is required for create, empty, and delete actions"
+    exit 1
+fi
+
+if [ "$ACTION" != "list" ] && [ -z "$BUCKET_NAME" ]; then
+    echo "Error: Bucket name is required for $ACTION action"
+    echo "Usage: $0 $ACTION <bucket-name>"
     exit 1
 fi
 
 case $ACTION in
+    list)
+        aws s3api list-buckets
+    ;;
     create)
         aws s3 mb s3://$BUCKET_NAME
     ;;
@@ -21,7 +31,7 @@ case $ACTION in
         aws s3 rb s3://$BUCKET_NAME --force
     ;;
     *)
-        echo "Invalid action. Use 'create', 'empty', or 'delete'."
+        echo "Invalid action. Use 'list', 'create', 'empty', or 'delete'."
         exit 1
     ;;
 esac
