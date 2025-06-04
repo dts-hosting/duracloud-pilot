@@ -27,14 +27,27 @@ delete: ## Delete a deployed stack
 deploy: build ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
+.PHONY: docs-build
+docs-build: ## Build the docs site
+	@cd docs-src && npm run build
+
+.PHONY: docs-dev
+docs-dev: ## Start the docs dev server
+	@cd docs-src && npm run dev
+
+.PHONY: docs-install
+docs-install: ## Install docs dependencies
+	@npm install && cd docs-src && npm install
+
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: lint
-lint: ## Run go linters
+lint: ## Run linters
 	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
 	@gofmt -w .
+	@npm run format
 
 .PHONY: logs
 logs: ## Output logs to console
