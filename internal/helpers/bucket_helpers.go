@@ -268,6 +268,17 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 	log.Println("Public bucket policy applied.")
 }
 
+func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) {
+    _, err := s3Client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
+        Bucket: aws.String(bucketName),
+    })
+
+    if err != nil {
+        log.Fatalf("Failed to delete bucket policy: %v", err)
+    }
+    log.Printf("Bucket policy removed from: %s\n", bucketName)
+}
+
 func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) {
 	var arn = os.Getenv("S3_REPLICATION_ROLE_ARN")
 	var destBucket = fmt.Sprintf("%s%s", bucketName, IsManagedSuffix)
@@ -373,4 +384,5 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, s
 	var replicationBucketName = fmt.Sprintf("%s%s", fullBucketName, IsReplicationSuffix)
 	CreateNewBucket(ctx, s3Client, replicationBucketName)
 	AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Replication")
+	RemovePolicy(ctx, s3Client, fullBucketName)
 }
