@@ -4,7 +4,7 @@ import starlight from "@astrojs/starlight";
 
 export default defineConfig({
   site: "https://dts-hosting.github.io",
-  base: process.env.ASTRO_BASE || "/",
+  base: "/duracloud-pilot/",
   build: {
     assets: "_assets",
   },

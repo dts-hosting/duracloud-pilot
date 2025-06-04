@@ -35,8 +35,6 @@ jobs:
 
       - name: Build documentation
         run: make docs-build
-        env:
-          ASTRO_BASE: /duracloud-pilot
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
