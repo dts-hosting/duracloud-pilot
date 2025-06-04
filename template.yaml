@@ -68,8 +68,10 @@ Resources:
                 - s3:PutLifecycleConfiguration
                 # EventBridge notifications
                 - s3:PutBucketNotificationConfiguration
+                - s3:PutBucketNotification
                 # Inventory configuration
                 - s3:PutBucketInventoryConfiguration
+                - s3:PutInventoryConfiguration
                 # Public access settings
                 - s3:PutBucketPublicAccessBlock
                 - s3:PutBucketAcl
