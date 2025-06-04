@@ -18,6 +18,7 @@ The docs site requires [Node.js](https://nodejs.org/en). Install using `nvm`:
 - [nvm](https://github.com/nvm-sh/nvm)
 
 ```bash
+nvm install
 nvm use
 make docs-install
 ```
