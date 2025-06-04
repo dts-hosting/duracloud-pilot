@@ -154,21 +154,15 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 
 	log.Printf("Bucket Deny-all policy generating")
 	// apply a default deny-all policy
-	/*
 	policy := map[string]interface{}{
         "Version": "2012-10-17",
         "Statement": []map[string]interface{}{
             {
+				"Sid": "DenyAllUploads",
                 "Effect":   "Deny",
                 "Principal": "*",
-                "Action":   "*",
+                "Action":   "s3:PutObject",
                 "Resource": fmt.Sprintf("arn:aws:s3:::%s/*", fullBucketName),
-            },
-            {
-                "Effect":   "Deny",
-                "Principal": "*",
-                "Action":   "*",
-                "Resource": fmt.Sprintf("arn:aws:s3:::%s", fullBucketName),
             },
         },
     }
@@ -178,7 +172,6 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
         log.Fatalf("failed to marshal policy: %v", err)
     }
 
-	// TODO uncomment. Proved working but makes testing impossible
     _, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
         Bucket: aws.String(fullBucketName),
         Policy: aws.String(string(policyJSON)),
@@ -186,8 +179,8 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
     if err != nil {
         log.Fatalf("failed to put bucket policy: %v", err)
     }
-	*/
-	log.Printf("TODO INOP: Applied Bucket Deny-all policy")
+
+	log.Printf("Applied Bucket Deny-all policy")
 
 	log.Printf("Enable Bucket versioning")
 	_, err = s3Client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
@@ -199,11 +192,11 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 	if err != nil {
 		log.Fatalf("failed to enable versioning: %v", err)
 	}
-	fmt.Println("Bucket versioning enabled.")
+	log.Println("Bucket versioning enabled.")
 
 
 	days := int32(7)
-	fmt.Printf("Bucket Non-current expiration being set to %d days", days)
+	log.Printf("Bucket Non-current expiration being set to %d days", days)
 	_, err = s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(fullBucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
@@ -222,7 +215,7 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 	if err != nil {
 		log.Fatalf("failed to set lifecycle rule: %v", err)
 	}
-	fmt.Println("Lifecycle rule set: Non-current versions expire after 7 days.")
+	log.Printf("Lifecycle rule set: Non-current versions expire after %d days", days)
 
 	if IsPublicBucket(bucketName) {
 		log.Printf("Public Bucket detected")
@@ -239,7 +232,7 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 		if err != nil {
 			log.Fatalf("failed to disable public access block: %v", err)
 		}
-		fmt.Println("Public access block disabled.")
+		log.Println("Public access block disabled.")
 
 
 		policy := map[string]interface{}{
@@ -267,7 +260,54 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, b
 		if err != nil {
 			log.Fatalf("failed to apply public bucket policy: %v", err)
 		}
-		fmt.Println("Public bucket policy applied.")
+		log.Println("Public bucket policy applied.")
+
+		_, err = s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
+			Bucket: aws.String(fullBucketName),
+			Tagging: &types.Tagging{
+				TagSet: []types.Tag{
+					{Key: aws.String("BucketType"), Value: aws.String("Public")},
+				},
+			},
+		})
+		if err != nil {
+			log.Fatalf("failed to add  bucket tags: %v", err)
+		}
+		log.Printf("Bucket Tags added")
+
+
+	} else {
+		daysToIA      := int32(30)
+		daysToGlacier := int32(60)
+
+		_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
+			Bucket: aws.String(fullBucketName),
+			LifecycleConfiguration: &types.BucketLifecycleConfiguration{
+				Rules: []types.LifecycleRule{
+					{
+						ID:     aws.String("IAThenGlacierIR"),
+						Status: types.ExpirationStatusEnabled,
+						Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")}, // All objects
+						Transitions: []types.Transition{
+							{
+								Days:         &daysToIA,
+								StorageClass: types.TransitionStorageClassStandardIa,
+							},
+							{
+								Days:         &daysToGlacier,
+								StorageClass: types.TransitionStorageClassGlacierIr,
+							},
+						},
+					},
+				},
+			},
+		})
+
+		if err != nil {
+			log.Fatalf("failed to configure lifecycle: %v", err)
+		}
+
+		log.Printf("Lifecycle rule set: Transition to  IA in %d days, then Glacier IR after %d days.", daysToIA, daysToGlacier)
 	}
 
 }
