@@ -134,7 +134,7 @@ func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string
 	}
 }
 
-func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string) {
+func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) {
 	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
 		Bucket: aws.String(bucketName),
 		Tagging: &types.Tagging{
@@ -268,24 +268,9 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 	log.Println("Public bucket policy applied.")
 }
 
-func AddPublicTags(ctx context.Context, s3Client *s3.Client, bucketName string) {
-	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
-		Bucket: aws.String(bucketName),
-		Tagging: &types.Tagging{
-			TagSet: []types.Tag{
-				{Key: aws.String("BucketType"), Value: aws.String("Public")},
-			},
-		},
-	})
-	if err != nil {
-		log.Fatalf("failed to add  bucket tags: %v", err)
-	}
-	log.Printf("Bucket Tags added")
-}
-
 func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) {
 	var arn = os.Getenv("S3_REPLICATION_ROLE_ARN")
-	var destBucket = fmt.Sprintf("%s-%s", bucketName, IsManagedSuffix)
+	var destBucket = fmt.Sprintf("%s%s", bucketName, IsManagedSuffix)
     _, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
         Bucket: aws.String(bucketName),
         Id:     aws.String("InventoryReport"),
@@ -370,7 +355,7 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, s
 	fullBucketName := fmt.Sprintf("%s-%s", stackName, bucketName)
 	log.Printf("Creating bucket  %v", fullBucketName)
 	CreateNewBucket(ctx, s3Client, fullBucketName)
-	AddBucketTags(ctx, s3Client, fullBucketName, stackName)
+	AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Standard")
 	AddDenyAllPolicy(ctx, s3Client, fullBucketName)
 	EnableVersioning(ctx, s3Client, fullBucketName)
 	AddExpiration(ctx, s3Client, fullBucketName)
@@ -378,10 +363,14 @@ func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, s
 	if IsPublicBucket(bucketName) {
 		MakePublic(ctx, s3Client, fullBucketName)
 		AddPublicPolicy(ctx, s3Client, fullBucketName)
-		AddPublicTags(ctx, s3Client, fullBucketName)
+		//AddPublicTags(ctx, s3Client, fullBucketName)
+		AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Public")
 	} else {
 		EnableLifecycle(ctx, s3Client, fullBucketName)
 	}
 	EnableEventBridge(ctx, s3Client, fullBucketName)
 	EnableInventory(ctx, s3Client, fullBucketName)
+	var replicationBucketName = fmt.Sprintf("%s%s", fullBucketName, IsReplicationSuffix)
+	CreateNewBucket(ctx, s3Client, replicationBucketName)
+	AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Replication")
 }
