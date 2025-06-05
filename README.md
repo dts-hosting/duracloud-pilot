@@ -69,7 +69,8 @@ AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyras
 The `bucket-manager` script can be used to create, clear and delete buckets:
 
 ```bash
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh  duracloud-pilot-bucket1 create
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh  duracloud-pilot-bucket1 empty
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh  duracloud-pilot-bucket1 delete
+AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh list
+AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh create duracloud-pilot-bucket1
+AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh empty duracloud-pilot-bucket1
+AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh delete duracloud-pilot-bucket1
 ```
