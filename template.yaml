@@ -14,6 +14,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image URI for Bucket Requested function (leave empty for local build)"
+  FileDeletedImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image URI for File Deleted function (leave empty for local build)"
   LambdaArchitecture:
     Type: String
     AllowedValues:
@@ -96,7 +100,67 @@ Resources:
                   "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 300
 
+  FileDeletedFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: file-deleted
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-file-deleted"
+    Properties:
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that processes s3 object deleted events
+      Environment:
+        Variables:
+          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
+      ImageUri:
+        !If [UseExternalImage, !Ref FileDeletedImageUri, !Ref "AWS::NoValue"]
+      MemorySize: 128
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:DeleteItem
+              Resource:
+                - !GetAtt DynamoDBChecksumTable.Arn
+                - !Sub "${DynamoDBChecksumTable.Arn}/index/*"
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource: !GetAtt SQSObjectDeleted.Arn
+            - Effect: Allow
+              Action:
+                - iam:PassRole
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  "iam:PassedToService": "s3.amazonaws.com"
+      Timeout: 60
+
   ##### Function resources (TODO: docs for each resource)
+  CloudWatchSQSObjectDeletedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-object-deleted-dlq-messages"
+      AlarmDescription: "Messages in object deleted DLQ"
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SQSObjectDeletedDLQ.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
+      Period: 300
+      Statistic: Average
+      Threshold: 1
+
   DynamoDBChecksumTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -266,17 +330,24 @@ Resources:
   #      EventSourceArn: !GetAtt SQSObjectCreated.Arn
   #      FunctionName: !Ref FileUploadedFunction
 
-  #  LambdaSQSObjectDeletedSource:
-  #    Type: AWS::Lambda::EventSourceMapping
-  #    Properties:
-  #      BatchSize: 10
-  #      EventSourceArn: !GetAtt SQSObjectDeleted.Arn
-  #      FunctionName: !Ref FileDeletedFunction
+  LambdaSQSObjectDeletedSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      EventSourceArn: !GetAtt SQSObjectDeleted.Arn
+      FunctionName: !Ref FileDeletedFunction
+      MaximumBatchingWindowInSeconds: 5
 
   LogsBucketRequestedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${BucketRequestedFunction}"
+      RetentionInDays: 7
+
+  LogsFileDeletedFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${FileDeletedFunction}"
       RetentionInDays: 7
 
   S3BucketRequestedBucket:
@@ -355,6 +426,18 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${AWS::StackName}-object-deleted"
+      MessageRetentionPeriod: 1209600
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SQSObjectDeletedDLQ.Arn
+        maxReceiveCount: 3
+      VisibilityTimeout: 300
+
+  SQSObjectDeletedDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-object-deleted-dlq"
+      MessageRetentionPeriod: 1209600
 
   ##### IAM group resources
   IAMS3UsersGroup:
