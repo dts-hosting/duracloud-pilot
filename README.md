@@ -64,6 +64,12 @@ This can be used to test incoming event payloads.
 AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
 ```
 
+### FileDeletedFunction
+
+```bash
+make invoke func=FileDeletedFunction event=events/file-deleted/event.json
+```
+
 ## Utility scripts
 
 The `bucket-manager` script can be used to create, clear and delete buckets:
