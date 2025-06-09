@@ -39,14 +39,6 @@ docs-dev: ## Start the docs dev server
 docs-install: ## Install docs dependencies
 	@npm install && cd docs-src && npm install
 
-.PHONY: docker-build
-docker-build: ## Build DuraCloud docker images
-	@docker build --build-arg FUNCTION_NAME=bucket-requested -t docker.io/duracloud/bucket-requested:latest .
-
-.PHONY: docker-push
-docker-push: ## Push DuraCloud docker images
-	@docker push docker.io/duracloud/bucket-requested:latest
-
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
@@ -60,11 +52,6 @@ lint: ## Run linters
 .PHONY: logs
 logs: ## Output logs to console
 	@./scripts/output-logs.sh $(func) $(stack) $(interval)
-
-.PHONY: lint
-lint: ## Run go linters
-	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
-	@gofmt -w .
 
 .PHONY: pull
 pull: ## Pull required docker images

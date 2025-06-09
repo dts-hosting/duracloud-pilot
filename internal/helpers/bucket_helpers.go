@@ -3,28 +3,29 @@ package helpers
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"encoding/json"
+	"io"
 	"os"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 const (
-	IsBucketRequestedSuffix = "-bucket-requested"
-	IsDuraCloudPrefix       = "duracloud-"
-	IsLogsSuffix            = "-logs"
-	IsManagedSuffix         = "-managed"
-	IsPublicSuffix          = "-public"
-	IsReplicationSuffix     = "-replication"
+	BucketRequestedSuffix = "-bucket-requested"
+	DuraCloudPrefix       = "duracloud-"
+	LogsSuffix            = "-logs"
+	ManagedSuffix         = "-managed"
+	PublicSuffix          = "-public"
+	ReplicationSuffix     = "-replication"
 )
 
 func IsBucketRequestBucket(name string) bool {
-	return strings.HasSuffix(name, IsBucketRequestedSuffix)
+	return strings.HasSuffix(name, BucketRequestedSuffix)
 }
 
 // IsIgnoreFilesBucket buckets excluded from checksum processing
@@ -33,23 +34,23 @@ func IsIgnoreFilesBucket(name string) bool {
 }
 
 func IsDuraCloudBucket(name string) bool {
-	return strings.HasPrefix(name, IsDuraCloudPrefix)
+	return strings.HasPrefix(name, DuraCloudPrefix)
 }
 
 func IsLogsBucket(name string) bool {
-	return strings.HasSuffix(name, IsLogsSuffix)
+	return strings.HasSuffix(name, LogsSuffix)
 }
 
 func IsManagedBucket(name string) bool {
-	return strings.HasSuffix(name, IsManagedSuffix)
+	return strings.HasSuffix(name, ManagedSuffix)
 }
 
 func IsPublicBucket(name string) bool {
-	return strings.HasSuffix(name, IsPublicSuffix)
+	return strings.HasSuffix(name, PublicSuffix)
 }
 
 func IsReplicationBucket(name string) bool {
-	return strings.HasSuffix(name, IsReplicationSuffix)
+	return strings.HasSuffix(name, ReplicationSuffix)
 }
 
 // IsRestrictedBucket buckets with restricted access permissions for s3 users
@@ -70,12 +71,12 @@ func GetBucketRequestLimit(ctx context.Context) (int, error) {
 	var maxBuckets, err = strconv.Atoi(maxBucketsEnv)
 
 	if err != nil {
-		return -1, fmt.Errorf("Unable to read max buckets per request environment variable due to : %v", err)
+		return -1, fmt.Errorf("unable to read max buckets per request environment variable due to: %v", err)
 	}
 	return maxBuckets, nil
 }
 
-// getBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
+// GetBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
 func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string) ([]string, error) {
 	var buckets []string
 
@@ -87,7 +88,9 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object: %s from %s due to %s", key, bucket, err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	scanner := bufio.NewScanner(resp.Body)
 
@@ -101,16 +104,16 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("Error reading response: %v", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
 	}
 
 	var maxBuckets, e = GetBucketRequestLimit(ctx)
 	if e != nil {
-		return nil, fmt.Errorf("Failed to get bucket request limit")
+		return nil, fmt.Errorf("failed to get bucket request limit")
 	}
 	bucketsRequested := len(buckets)
 	if bucketsRequested >= maxBuckets {
-		return nil, fmt.Errorf("Exceeded maximum allowed buckets per request [%s] with [%s]",
+		return nil, fmt.Errorf("exceeded maximum allowed buckets per request [%d] with [%d]",
 			maxBuckets, bucketsRequested)
 	}
 
@@ -122,8 +125,8 @@ func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string
 	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
 		CreateBucketConfiguration: &types.CreateBucketConfiguration{
-            LocationConstraint: types.BucketLocationConstraint(region),
-        },
+			LocationConstraint: types.BucketLocationConstraint(region),
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create bucket: %v", err)
@@ -145,12 +148,12 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
 		Bucket: aws.String(bucketName),
 		Tagging: &types.Tagging{
-            TagSet: []types.Tag{
-                {Key: aws.String("Application"), Value: aws.String("Duracloud")},
-                {Key: aws.String("StackName"), Value: aws.String(stackName)},
-                {Key: aws.String("BucketType"), Value: aws.String("Standard")},
-            },
-        },
+			TagSet: []types.Tag{
+				{Key: aws.String("Application"), Value: aws.String("Duracloud")},
+				{Key: aws.String("StackName"), Value: aws.String(stackName)},
+				{Key: aws.String("BucketType"), Value: aws.String("Standard")},
+			},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to add  bucket tags: %v", err)
@@ -161,30 +164,30 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	// apply a default deny-all policy
 	policy := map[string]interface{}{
-        "Version": "2012-10-17",
-        "Statement": []map[string]interface{}{
-            {
-				"Sid": "DenyAllUploads",
-                "Effect":   "Deny",
-                "Principal": "*",
-                "Action":   "s3:PutObject",
-                "Resource": fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
-            },
-        },
-    }
+		"Version": "2012-10-17",
+		"Statement": []map[string]interface{}{
+			{
+				"Sid":       "DenyAllUploads",
+				"Effect":    "Deny",
+				"Principal": "*",
+				"Action":    "s3:PutObject",
+				"Resource":  fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
+			},
+		},
+	}
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-        return fmt.Errorf("failed to marshal policy: %v", err)
-    }
+		return fmt.Errorf("failed to marshal policy: %v", err)
+	}
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
-        Bucket: aws.String(bucketName),
-        Policy: aws.String(string(policyJSON)),
-    })
-    if err != nil {
-        return fmt.Errorf("failed to put bucket policy: %v", err)
-    }
+		Bucket: aws.String(bucketName),
+		Policy: aws.String(string(policyJSON)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to put bucket policy: %v", err)
+	}
 	return nil
 }
 
@@ -208,7 +211,7 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
 			Rules: []types.LifecycleRule{
 				{
-					ID: aws.String("ExpireOldVersionsAfter7Days"),
+					ID:     aws.String("ExpireOldVersionsAfter7Days"),
 					Status: types.ExpirationStatusEnabled,
 					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")}, // Applies to all objects
 					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
@@ -271,53 +274,53 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 }
 
 func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-    _, err := s3Client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
-        Bucket: aws.String(bucketName),
-    })
+	_, err := s3Client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	})
 
-    if err != nil {
-        return fmt.Errorf("Failed to delete bucket policy: %v", err)
-    }
+	if err != nil {
+		return fmt.Errorf("failed to delete bucket policy: %v", err)
+	}
 	return nil
 }
 
 func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	var arn = os.Getenv("S3_REPLICATION_ROLE_ARN")
-	var destBucket = fmt.Sprintf("%s%s", bucketName, IsManagedSuffix)
-    _, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
-        Bucket: aws.String(bucketName),
-        Id:     aws.String("InventoryReport"),
-        InventoryConfiguration: &types.InventoryConfiguration{
-			IsEnabled: aws.Bool(true),
-			Id:     aws.String("InventoryReport"),
-            IncludedObjectVersions: types.InventoryIncludedObjectVersionsAll,
-            Schedule: &types.InventorySchedule{
-                Frequency: types.InventoryFrequencyDaily,
-            },
-            Destination: &types.InventoryDestination{
-                S3BucketDestination: &types.InventoryS3BucketDestination{
-                    AccountId: aws.String(arn), // your AWS account ID
-                    Bucket:    aws.String("arn:aws:s3:::" + destBucket),
-                    Format:    types.InventoryFormatCsv,
-                    Prefix:    aws.String("inventory/"),
-                },
-            },
-            OptionalFields: []types.InventoryOptionalField{
-                types.InventoryOptionalFieldSize,
-                types.InventoryOptionalFieldLastModifiedDate,
-                types.InventoryOptionalFieldStorageClass,
-            },
-        },
-    })
+	var destBucket = fmt.Sprintf("%s%s", bucketName, ManagedSuffix)
+	_, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
+		Bucket: aws.String(bucketName),
+		Id:     aws.String("InventoryReport"),
+		InventoryConfiguration: &types.InventoryConfiguration{
+			IsEnabled:              aws.Bool(true),
+			Id:                     aws.String("InventoryReport"),
+			IncludedObjectVersions: types.InventoryIncludedObjectVersionsAll,
+			Schedule: &types.InventorySchedule{
+				Frequency: types.InventoryFrequencyDaily,
+			},
+			Destination: &types.InventoryDestination{
+				S3BucketDestination: &types.InventoryS3BucketDestination{
+					AccountId: aws.String(arn), // your AWS account ID
+					Bucket:    aws.String("arn:aws:s3:::" + destBucket),
+					Format:    types.InventoryFormatCsv,
+					Prefix:    aws.String("inventory/"),
+				},
+			},
+			OptionalFields: []types.InventoryOptionalField{
+				types.InventoryOptionalFieldSize,
+				types.InventoryOptionalFieldLastModifiedDate,
+				types.InventoryOptionalFieldStorageClass,
+			},
+		},
+	})
 
-    if err != nil {
-        return fmt.Errorf("failed to enable inventory configuration: %v", err)
-    }
+	if err != nil {
+		return fmt.Errorf("failed to enable inventory configuration: %v", err)
+	}
 	return nil
 }
 
 func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	daysToIA      := int32(30)
+	daysToIA := int32(30)
 	daysToGlacier := int32(60)
 
 	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
@@ -350,13 +353,13 @@ func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string
 
 func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	_, err := s3Client.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
-        Bucket: aws.String(bucketName),
-        NotificationConfiguration: &types.NotificationConfiguration{
-            EventBridgeConfiguration: &types.EventBridgeConfiguration{},
-        },
-    })
-    if err != nil {
-        return fmt.Errorf("failed to enable EventBridge notifications: %v", err)
-    }
+		Bucket: aws.String(bucketName),
+		NotificationConfiguration: &types.NotificationConfiguration{
+			EventBridgeConfiguration: &types.EventBridgeConfiguration{},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to enable EventBridge notifications: %v", err)
+	}
 	return nil
 }
