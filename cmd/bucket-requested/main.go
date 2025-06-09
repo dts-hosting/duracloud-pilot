@@ -147,6 +147,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			rollback(ctx, s3Client, createdBuckets)
 		}
 
+		log.Printf("Finished Creating bucket %v", fullBucketName)
 	}
 
 	return nil
