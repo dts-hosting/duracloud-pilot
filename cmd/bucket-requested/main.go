@@ -13,6 +13,9 @@ import (
 	"os"
 )
 
+var accountID string
+var awsCtx helpers.AWSContext
+var region string
 var s3Client *s3.Client
 
 func init() {
@@ -20,18 +23,26 @@ func init() {
 	if err != nil {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
+
+	accountID, err = helpers.GetAccountID(context.Background(), awsConfig)
+	if err != nil {
+		log.Fatalf("Unable to get AWS account ID: %v", err)
+	}
+
+	region = awsConfig.Region
 	s3Client = s3.NewFromConfig(awsConfig)
 }
 
 func handler(ctx context.Context, event json.RawMessage) error {
+	awsCtx = helpers.AWSContext{
+		AccountID: accountID,
+		Region:    region,
+	}
+	ctx = context.WithValue(ctx, helpers.AWSContextKey, awsCtx)
 
 	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
-	log.Printf("Using bucket prefix: %s", bucketPrefix)
-
-	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
-	log.Printf("Using replication role ARN: %s", replicationRoleArn)
-
-	bucketLimit, _ := helpers.GetBucketRequestLimit(ctx)
+	bucketLimit, _ := helpers.GetBucketRequestLimit(os.Getenv("MAX_BUCKETS_PER_REQUEST"))
+	// TODO: replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
 
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
@@ -47,7 +58,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	objectKey := e.ObjectKey()
 	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
 
-	requestedBuckets, err := helpers.GetBuckets(ctx, s3Client, bucketName, objectKey)
+	requestedBuckets, err := helpers.GetBuckets(ctx, s3Client, bucketName, objectKey, bucketLimit)
 	if err != nil {
 		log.Panicln(err)
 	}
@@ -55,15 +66,18 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	createdBuckets := make([]string, 0, bucketLimit)
 	for _, requestedBucketName := range requestedBuckets {
-
 		fullBucketName := fmt.Sprintf("%s-%s", bucketPrefix, requestedBucketName)
-		log.Printf("Creating bucket  %v", fullBucketName)
+		replicationBucketName := fmt.Sprintf("%s%s", fullBucketName, helpers.ReplicationSuffix)
+		log.Printf("Creating buckets: %s [%s]", fullBucketName, replicationBucketName)
+
 		err := helpers.CreateNewBucket(ctx, s3Client, fullBucketName)
 		if err != nil {
 			rollback(ctx, s3Client, createdBuckets)
 			log.Panicf("Unable to create bucket: %s", err)
 		}
+
 		createdBuckets = append(createdBuckets, fullBucketName)
+
 		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
 		if err != nil {
 			rollback(ctx, s3Client, createdBuckets)
@@ -113,8 +127,8 @@ func handler(ctx context.Context, event json.RawMessage) error {
 				rollback(ctx, s3Client, createdBuckets)
 				log.Panic(err.Error())
 			}
-
 		}
+
 		err = helpers.EnableEventBridge(ctx, s3Client, fullBucketName)
 		if err != nil {
 			rollback(ctx, s3Client, createdBuckets)
@@ -127,7 +141,6 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			log.Panic(err.Error())
 		}
 
-		var replicationBucketName = fmt.Sprintf("%s%s", fullBucketName, helpers.ReplicationSuffix)
 		err = helpers.CreateNewBucket(ctx, s3Client, replicationBucketName)
 		if err != nil {
 			rollback(ctx, s3Client, createdBuckets)

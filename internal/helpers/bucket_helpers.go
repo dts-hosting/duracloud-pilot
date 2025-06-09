@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"io"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -66,18 +65,18 @@ func ValidateBucketName(name string) bool {
 	return !disallowed.MatchString(name)
 }
 
-func GetBucketRequestLimit(ctx context.Context) (int, error) {
-	var maxBucketsEnv = os.Getenv("S3_MAX_BUCKETS_PER_REQUEST")
-	var maxBuckets, err = strconv.Atoi(maxBucketsEnv)
+func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
+	maxBuckets, err := strconv.Atoi(bucketsPerRequest)
 
 	if err != nil {
-		return -1, fmt.Errorf("unable to read max buckets per request environment variable due to: %v", err)
+		return -1, fmt.Errorf("unable to read max buckets per request variable due to: %v", err)
 	}
+
 	return maxBuckets, nil
 }
 
 // GetBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
-func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string) ([]string, error) {
+func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string, limit int) ([]string, error) {
 	var buckets []string
 
 	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
@@ -107,25 +106,25 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 		return nil, fmt.Errorf("error reading response: %v", err)
 	}
 
-	var maxBuckets, e = GetBucketRequestLimit(ctx)
-	if e != nil {
-		return nil, fmt.Errorf("failed to get bucket request limit")
-	}
 	bucketsRequested := len(buckets)
-	if bucketsRequested >= maxBuckets {
+	if bucketsRequested >= limit {
 		return nil, fmt.Errorf("exceeded maximum allowed buckets per request [%d] with [%d]",
-			maxBuckets, bucketsRequested)
+			limit, bucketsRequested)
 	}
 
 	return buckets, nil
 }
 
 func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	region := os.Getenv("AWS_REGION")
+	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
+	if !ok {
+		return fmt.Errorf("error retrieving aws context")
+	}
+
 	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
 		CreateBucketConfiguration: &types.CreateBucketConfiguration{
-			LocationConstraint: types.BucketLocationConstraint(region),
+			LocationConstraint: types.BucketLocationConstraint(awsCtx.Region),
 		},
 	})
 	if err != nil {
@@ -285,7 +284,11 @@ func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) e
 }
 
 func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	var arn = os.Getenv("S3_REPLICATION_ROLE_ARN")
+	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
+	if !ok {
+		return fmt.Errorf("error retrieving aws context")
+	}
+
 	var destBucket = fmt.Sprintf("%s%s", bucketName, ManagedSuffix)
 	_, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
 		Bucket: aws.String(bucketName),
@@ -299,7 +302,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string
 			},
 			Destination: &types.InventoryDestination{
 				S3BucketDestination: &types.InventoryS3BucketDestination{
-					AccountId: aws.String(arn), // your AWS account ID
+					AccountId: aws.String(awsCtx.AccountID),
 					Bucket:    aws.String("arn:aws:s3:::" + destBucket),
 					Format:    types.InventoryFormatCsv,
 					Prefix:    aws.String("inventory/"),
