@@ -62,6 +62,7 @@ Resources:
                 # Basic bucket policy and tagging
                 - s3:PutBucketTagging
                 - s3:PutBucketPolicy
+                - s3:DeleteBucketPolicy
                 # Bucket Versioning
                 - s3:PutBucketVersioning
                 # Bucket Lifecycle Configuration

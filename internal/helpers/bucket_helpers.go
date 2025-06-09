@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"encoding/json"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -66,18 +65,18 @@ func ValidateBucketName(name string) bool {
 	return !disallowed.MatchString(name)
 }
 
-func GetBucketRequestLimit(ctx context.Context) int {
+func GetBucketRequestLimit(ctx context.Context) (int, error) {
 	var maxBucketsEnv = os.Getenv("S3_MAX_BUCKETS_PER_REQUEST")
 	var maxBuckets, err = strconv.Atoi(maxBucketsEnv)
 
 	if err != nil {
-		log.Fatalf("Unable to read max buckets per request environment variable due to : %v", err)
+		return -1, fmt.Errorf("Unable to read max buckets per request environment variable due to : %v", err)
 	}
-	return maxBuckets
+	return maxBuckets, nil
 }
 
 // getBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
-func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string) []string {
+func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string) ([]string, error) {
 	var buckets []string
 
 	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
@@ -86,8 +85,7 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	})
 
 	if err != nil {
-		log.Fatalf("failed to get object: %s from %s due to %s", key, bucket, err)
-		return nil
+		return nil, fmt.Errorf("failed to get object: %s from %s due to %s", key, bucket, err)
 	}
 	defer resp.Body.Close()
 
@@ -95,33 +93,31 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		log.Printf("Reading bucket name: %s", line)
 		if ValidateBucketName(line) {
 			buckets = append(buckets, line)
 		} else {
-			log.Fatalf("invalid bucket name requested: %s", line)
-			return nil
+			return nil, fmt.Errorf("invalid bucket name requested: %s", line)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Fatalf("Error reading response: %v", err)
-		return nil
+		return nil, fmt.Errorf("Error reading response: %v", err)
 	}
 
-	// TODO: do we want to error like this or ignore extras (i.e. don't append additional buckets above)?
-	var maxBuckets = GetBucketRequestLimit(ctx)
+	var maxBuckets, e = GetBucketRequestLimit(ctx)
+	if e != nil {
+		return nil, fmt.Errorf("Failed to get bucket request limit")
+	}
 	bucketsRequested := len(buckets)
 	if bucketsRequested >= maxBuckets {
-		log.Fatalf("Exceeded maximum allowed buckets per request [%s] with [%s]",
+		return nil, fmt.Errorf("Exceeded maximum allowed buckets per request [%s] with [%s]",
 			maxBuckets, bucketsRequested)
-		return nil
 	}
 
-	return buckets
+	return buckets, nil
 }
 
-func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	region := os.Getenv("AWS_REGION")
 	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
@@ -130,11 +126,12 @@ func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string
         },
 	})
 	if err != nil {
-		log.Fatalf("failed to create bucket: %v", err)
+		return fmt.Errorf("failed to create bucket: %v", err)
 	}
+	return nil
 }
 
-func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) {
+func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) error {
 	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
 		Bucket: aws.String(bucketName),
 		Tagging: &types.Tagging{
@@ -146,14 +143,12 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
         },
 	})
 	if err != nil {
-		log.Fatalf("failed to add  bucket tags: %v", err)
+		return fmt.Errorf("failed to add  bucket tags: %v", err)
 	}
-	log.Printf("Bucket Tags added")
-
+	return nil
 }
 
-func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) {
-	log.Printf("Bucket Deny-all policy generating")
+func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	// apply a default deny-all policy
 	policy := map[string]interface{}{
         "Version": "2012-10-17",
@@ -170,7 +165,7 @@ func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName strin
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-        log.Fatalf("failed to marshal policy: %v", err)
+        return fmt.Errorf("failed to marshal policy: %v", err)
     }
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
@@ -178,13 +173,12 @@ func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName strin
         Policy: aws.String(string(policyJSON)),
     })
     if err != nil {
-        log.Fatalf("failed to put bucket policy: %v", err)
+        return fmt.Errorf("failed to put bucket policy: %v", err)
     }
-	log.Printf("Applied Bucket Deny-all policy")
+	return nil
 }
 
-func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName string) {
-	log.Printf("Enable Bucket versioning")
+func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	_, err := s3Client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
 		VersioningConfiguration: &types.VersioningConfiguration{
@@ -192,14 +186,13 @@ func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName strin
 		},
 	})
 	if err != nil {
-		log.Fatalf("failed to enable versioning: %v", err)
+		return fmt.Errorf("failed to enable versioning: %v", err)
 	}
-	log.Println("Bucket versioning enabled.")
+	return nil
 }
 
-func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	days := int32(7)
-	log.Printf("Bucket Non-current expiration being set to %d days", days)
 	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(bucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
@@ -216,13 +209,12 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 		},
 	})
 	if err != nil {
-		log.Fatalf("failed to set lifecycle rule: %v", err)
+		return fmt.Errorf("failed to set lifecycle rule: %v", err)
 	}
-	log.Printf("Lifecycle rule set: Non-current versions expire after %d days", days)
+	return nil
 }
 
-func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) {
-	log.Printf("Public Bucket detected")
+func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	blockFalse := false
 	_, err := s3Client.PutPublicAccessBlock(ctx, &s3.PutPublicAccessBlockInput{
 		Bucket: aws.String(bucketName),
@@ -234,12 +226,12 @@ func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) {
 		},
 	})
 	if err != nil {
-		log.Fatalf("failed to disable public access block: %v", err)
+		return fmt.Errorf("failed to disable public access block: %v", err)
 	}
-	log.Println("Public access block disabled.")
+	return nil
 }
 
-func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	policy := map[string]interface{}{
 		"Version": "2012-10-17",
 		"Statement": []map[string]interface{}{
@@ -255,7 +247,7 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		log.Fatalf("failed to marshal bucket policy: %v", err)
+		return fmt.Errorf("failed to marshal bucket policy: %v", err)
 	}
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
@@ -263,23 +255,23 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 		Policy: aws.String(string(policyJSON)),
 	})
 	if err != nil {
-		log.Fatalf("failed to apply public bucket policy: %v", err)
+		return fmt.Errorf("failed to apply public bucket policy: %v", err)
 	}
-	log.Println("Public bucket policy applied.")
+	return nil
 }
 
-func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
     _, err := s3Client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
         Bucket: aws.String(bucketName),
     })
 
     if err != nil {
-        log.Fatalf("Failed to delete bucket policy: %v", err)
+        return fmt.Errorf("Failed to delete bucket policy: %v", err)
     }
-    log.Printf("Bucket policy removed from: %s\n", bucketName)
+	return nil
 }
 
-func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	var arn = os.Getenv("S3_REPLICATION_ROLE_ARN")
 	var destBucket = fmt.Sprintf("%s%s", bucketName, IsManagedSuffix)
     _, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
@@ -309,13 +301,12 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string
     })
 
     if err != nil {
-        log.Fatalf("failed to enable inventory configuration: %v", err)
+        return fmt.Errorf("failed to enable inventory configuration: %v", err)
     }
-
-    log.Println("Inventory configuration enabled.")
+	return nil
 }
 
-func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	daysToIA      := int32(30)
 	daysToGlacier := int32(60)
 
@@ -342,13 +333,12 @@ func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string
 		},
 	})
 	if err != nil {
-		log.Fatalf("failed to configure lifecycle: %v", err)
+		return fmt.Errorf("failed to configure lifecycle: %v", err)
 	}
-	log.Printf("Lifecycle rule set: Transition to  IA in %d days, then Glacier IR after %d days.", daysToIA, daysToGlacier)
-
+	return nil
 }
 
-func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName string) {
+func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	_, err := s3Client.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
         Bucket: aws.String(bucketName),
         NotificationConfiguration: &types.NotificationConfiguration{
@@ -356,33 +346,7 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
         },
     })
     if err != nil {
-        log.Fatalf("failed to enable EventBridge notifications: %v", err)
+        return fmt.Errorf("failed to enable EventBridge notifications: %v", err)
     }
-    log.Printf("EventBridge notifications enabled on bucket: %v", bucketName)
-}
-
-func CreateBucket(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string) {
-
-	fullBucketName := fmt.Sprintf("%s-%s", stackName, bucketName)
-	log.Printf("Creating bucket  %v", fullBucketName)
-	CreateNewBucket(ctx, s3Client, fullBucketName)
-	AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Standard")
-	AddDenyAllPolicy(ctx, s3Client, fullBucketName)
-	EnableVersioning(ctx, s3Client, fullBucketName)
-	AddExpiration(ctx, s3Client, fullBucketName)
-
-	if IsPublicBucket(bucketName) {
-		MakePublic(ctx, s3Client, fullBucketName)
-		AddPublicPolicy(ctx, s3Client, fullBucketName)
-		//AddPublicTags(ctx, s3Client, fullBucketName)
-		AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Public")
-	} else {
-		EnableLifecycle(ctx, s3Client, fullBucketName)
-	}
-	EnableEventBridge(ctx, s3Client, fullBucketName)
-	EnableInventory(ctx, s3Client, fullBucketName)
-	var replicationBucketName = fmt.Sprintf("%s%s", fullBucketName, IsReplicationSuffix)
-	CreateNewBucket(ctx, s3Client, replicationBucketName)
-	AddBucketTags(ctx, s3Client, fullBucketName, stackName, "Replication")
-	RemovePolicy(ctx, s3Client, fullBucketName)
+	return nil
 }
