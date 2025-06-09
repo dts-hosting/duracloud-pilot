@@ -131,6 +131,16 @@ func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string
 	return nil
 }
 
+func DeleteBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete bucket: %v", err)
+	}
+	return nil
+}
+
 func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) error {
 	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
 		Bucket: aws.String(bucketName),

@@ -31,6 +31,8 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
 	log.Printf("Using replication role ARN: %s", replicationRoleArn)
 
+	bucketLimit, _  := helpers.GetBucketRequestLimit(ctx)
+
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
 		log.Fatalf("Failed to parse event: %v", err)
@@ -51,34 +53,112 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
-	// Create new buckets
+	createdBuckets := make([]string, bucketLimit)
 	for _, requestedBucketName := range requestedBuckets {
 
 		fullBucketName := fmt.Sprintf("%s-%s", bucketPrefix, requestedBucketName)
 		log.Printf("Creating bucket  %v", fullBucketName)
-		helpers.CreateNewBucket(ctx, s3Client, fullBucketName)
-		helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
-		helpers.AddDenyAllPolicy(ctx, s3Client, fullBucketName)
-		helpers.EnableVersioning(ctx, s3Client, fullBucketName)
-		helpers.AddExpiration(ctx, s3Client, fullBucketName)
+		err := helpers.CreateNewBucket(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf("Unable to create bucket: ", err)
+			rollback(ctx, s3Client, createdBuckets)
+		}
+		createdBuckets = append(createdBuckets, fullBucketName)
+		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
+		err = helpers.AddDenyAllPolicy(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
+		err = helpers.EnableVersioning(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
+		err = helpers.AddExpiration(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
 
 		if helpers.IsPublicBucket(bucketName) {
-			helpers.MakePublic(ctx, s3Client, fullBucketName)
-			helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
-			//AddPublicTags(ctx, s3Client, fullBucketName)
-			helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Public")
+			err = helpers.MakePublic(ctx, s3Client, fullBucketName)
+			if err != nil {
+				log.Panicf(err.Error())
+				rollback(ctx, s3Client, createdBuckets)
+			}
+
+			err = helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
+			if err != nil {
+				log.Panicf(err.Error())
+				rollback(ctx, s3Client, createdBuckets)
+			}
+
+			err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Public")
+			if err != nil {
+				log.Panicf(err.Error())
+				rollback(ctx, s3Client, createdBuckets)
+			}
+
 		} else {
-			helpers.EnableLifecycle(ctx, s3Client, fullBucketName)
+			err := helpers.EnableLifecycle(ctx, s3Client, fullBucketName)
+			if err != nil {
+				log.Panicf(err.Error())
+				rollback(ctx, s3Client, createdBuckets)
+			}
+
 		}
-		helpers.EnableEventBridge(ctx, s3Client, fullBucketName)
-		helpers.EnableInventory(ctx, s3Client, fullBucketName)
+		err = helpers.EnableEventBridge(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
+		err = helpers.EnableInventory(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
 		var replicationBucketName = fmt.Sprintf("%s%s", fullBucketName, helpers.IsReplicationSuffix)
-		helpers.CreateNewBucket(ctx, s3Client, replicationBucketName)
-		helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Replication")
-		helpers.RemovePolicy(ctx, s3Client, fullBucketName)
+		err = helpers.CreateNewBucket(ctx, s3Client, replicationBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
+		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Replication")
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
+		err = helpers.RemovePolicy(ctx, s3Client, fullBucketName)
+		if err != nil {
+			log.Panicf(err.Error())
+			rollback(ctx, s3Client, createdBuckets)
+		}
+
 	}
 
 	return nil
+}
+
+func rollback(ctx context.Context, s3Client *s3.Client, buckets []string) {
+	for _, createdBucket := range buckets {
+		err := helpers.DeleteBucket(ctx, s3Client, createdBucket)
+		if err != nil {
+			log.Fatalf("Error rolling back previous error. Quiting!")
+		}
+	}
 }
 
 func main() {
