@@ -60,7 +60,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	requestedBuckets, err := helpers.GetBuckets(ctx, s3Client, bucketName, objectKey, bucketLimit)
 	if err != nil {
-		log.Panicln(err)
+		log.Fatalf("Error retrieving buckets list: %v", err)
 	}
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
@@ -84,7 +84,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			log.Panic(err.Error())
 		}
 
-		err = helpers.AddDenyAllPolicy(ctx, s3Client, fullBucketName)
+		err = helpers.AddDenyUploadPolicy(ctx, s3Client, fullBucketName)
 		if err != nil {
 			rollback(ctx, s3Client, createdBuckets)
 			log.Panic(err.Error())

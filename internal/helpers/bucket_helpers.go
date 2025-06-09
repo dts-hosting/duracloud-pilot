@@ -23,126 +23,6 @@ const (
 	ReplicationSuffix     = "-replication"
 )
 
-func IsBucketRequestBucket(name string) bool {
-	return strings.HasSuffix(name, BucketRequestedSuffix)
-}
-
-// IsIgnoreFilesBucket buckets excluded from checksum processing
-func IsIgnoreFilesBucket(name string) bool {
-	return IsBucketRequestBucket(name) || IsRestrictedBucket(name)
-}
-
-func IsDuraCloudBucket(name string) bool {
-	return strings.HasPrefix(name, DuraCloudPrefix)
-}
-
-func IsLogsBucket(name string) bool {
-	return strings.HasSuffix(name, LogsSuffix)
-}
-
-func IsManagedBucket(name string) bool {
-	return strings.HasSuffix(name, ManagedSuffix)
-}
-
-func IsPublicBucket(name string) bool {
-	return strings.HasSuffix(name, PublicSuffix)
-}
-
-func IsReplicationBucket(name string) bool {
-	return strings.HasSuffix(name, ReplicationSuffix)
-}
-
-// IsRestrictedBucket buckets with restricted access permissions for s3 users
-func IsRestrictedBucket(name string) bool {
-	return IsLogsBucket(name) || IsManagedBucket(name) || IsReplicationBucket(name)
-}
-
-func ValidateBucketName(name string) bool {
-	var (
-		whitelist  = "a-zA-Z0-9-"
-		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
-	)
-	return !disallowed.MatchString(name)
-}
-
-func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
-	maxBuckets, err := strconv.Atoi(bucketsPerRequest)
-
-	if err != nil {
-		return -1, fmt.Errorf("unable to read max buckets per request variable due to: %v", err)
-	}
-
-	return maxBuckets, nil
-}
-
-// GetBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
-func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string, limit int) ([]string, error) {
-	var buckets []string
-
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get object: %s from %s due to %s", key, bucket, err)
-	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
-
-	scanner := bufio.NewScanner(resp.Body)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if ValidateBucketName(line) {
-			buckets = append(buckets, line)
-		} else {
-			return nil, fmt.Errorf("invalid bucket name requested: %s", line)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
-	}
-
-	bucketsRequested := len(buckets)
-	if bucketsRequested >= limit {
-		return nil, fmt.Errorf("exceeded maximum allowed buckets per request [%d] with [%d]",
-			limit, bucketsRequested)
-	}
-
-	return buckets, nil
-}
-
-func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
-	if !ok {
-		return fmt.Errorf("error retrieving aws context")
-	}
-
-	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(bucketName),
-		CreateBucketConfiguration: &types.CreateBucketConfiguration{
-			LocationConstraint: types.BucketLocationConstraint(awsCtx.Region),
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create bucket: %v", err)
-	}
-	return nil
-}
-
-func DeleteBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	_, err := s3Client.DeleteBucket(ctx, &s3.DeleteBucketInput{
-		Bucket: aws.String(bucketName),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to delete bucket: %v", err)
-	}
-	return nil
-}
-
 func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) error {
 	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
 		Bucket: aws.String(bucketName),
@@ -160,7 +40,7 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 	return nil
 }
 
-func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	// apply a default deny-all policy
 	policy := map[string]interface{}{
 		"Version": "2012-10-17",
@@ -190,19 +70,6 @@ func AddDenyAllPolicy(ctx context.Context, s3Client *s3.Client, bucketName strin
 	return nil
 }
 
-func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	_, err := s3Client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
-		Bucket: aws.String(bucketName),
-		VersioningConfiguration: &types.VersioningConfiguration{
-			Status: types.BucketVersioningStatusEnabled,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to enable versioning: %v", err)
-	}
-	return nil
-}
-
 func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	days := int32(7)
 	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
@@ -222,23 +89,6 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set lifecycle rule: %v", err)
-	}
-	return nil
-}
-
-func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	blockFalse := false
-	_, err := s3Client.PutPublicAccessBlock(ctx, &s3.PutPublicAccessBlockInput{
-		Bucket: aws.String(bucketName),
-		PublicAccessBlockConfiguration: &types.PublicAccessBlockConfiguration{
-			BlockPublicAcls:       &blockFalse,
-			IgnorePublicAcls:      &blockFalse,
-			BlockPublicPolicy:     &blockFalse,
-			RestrictPublicBuckets: &blockFalse,
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to disable public access block: %v", err)
 	}
 	return nil
 }
@@ -272,13 +122,43 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 	return nil
 }
 
-func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	_, err := s3Client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
+func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
+	if !ok {
+		return fmt.Errorf("error retrieving aws context")
+	}
+
+	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+		CreateBucketConfiguration: &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(awsCtx.Region),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create bucket: %v", err)
+	}
+	return nil
+}
+
+func DeleteBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 		Bucket: aws.String(bucketName),
 	})
-
 	if err != nil {
-		return fmt.Errorf("failed to delete bucket policy: %v", err)
+		return fmt.Errorf("failed to delete bucket: %v", err)
+	}
+	return nil
+}
+
+func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
+		Bucket: aws.String(bucketName),
+		NotificationConfiguration: &types.NotificationConfiguration{
+			EventBridgeConfiguration: &types.EventBridgeConfiguration{},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to enable EventBridge notifications: %v", err)
 	}
 	return nil
 }
@@ -354,15 +234,135 @@ func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string
 	return nil
 }
 
-func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	_, err := s3Client.PutBucketNotificationConfiguration(ctx, &s3.PutBucketNotificationConfigurationInput{
+func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),
-		NotificationConfiguration: &types.NotificationConfiguration{
-			EventBridgeConfiguration: &types.EventBridgeConfiguration{},
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to enable EventBridge notifications: %v", err)
+		return fmt.Errorf("failed to enable versioning: %v", err)
 	}
 	return nil
+}
+
+func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
+	maxBuckets, err := strconv.Atoi(bucketsPerRequest)
+
+	if err != nil {
+		return -1, fmt.Errorf("unable to read max buckets per request variable due to: %v", err)
+	}
+
+	return maxBuckets, nil
+}
+
+// GetBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
+func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string, limit int) ([]string, error) {
+	var buckets []string
+
+	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object: %s from %s due to %s", key, bucket, err)
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+
+	scanner := bufio.NewScanner(resp.Body)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if ValidateBucketName(line) {
+			buckets = append(buckets, line)
+		} else {
+			return nil, fmt.Errorf("invalid bucket name requested: %s", line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	bucketsRequested := len(buckets)
+	if bucketsRequested >= limit {
+		return nil, fmt.Errorf("exceeded maximum allowed buckets per request [%d] with [%d]",
+			limit, bucketsRequested)
+	}
+
+	return buckets, nil
+}
+
+func IsBucketRequestBucket(name string) bool {
+	return strings.HasSuffix(name, BucketRequestedSuffix)
+}
+
+// IsIgnoreFilesBucket buckets excluded from checksum processing
+func IsIgnoreFilesBucket(name string) bool {
+	return IsBucketRequestBucket(name) || IsRestrictedBucket(name)
+}
+
+func IsDuraCloudBucket(name string) bool {
+	return strings.HasPrefix(name, DuraCloudPrefix)
+}
+
+func IsLogsBucket(name string) bool {
+	return strings.HasSuffix(name, LogsSuffix)
+}
+
+func IsManagedBucket(name string) bool {
+	return strings.HasSuffix(name, ManagedSuffix)
+}
+
+func IsPublicBucket(name string) bool {
+	return strings.HasSuffix(name, PublicSuffix)
+}
+
+func IsReplicationBucket(name string) bool {
+	return strings.HasSuffix(name, ReplicationSuffix)
+}
+
+// IsRestrictedBucket buckets with restricted access permissions for s3 users
+func IsRestrictedBucket(name string) bool {
+	return IsLogsBucket(name) || IsManagedBucket(name) || IsReplicationBucket(name)
+}
+
+func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	blockFalse := false
+	_, err := s3Client.PutPublicAccessBlock(ctx, &s3.PutPublicAccessBlockInput{
+		Bucket: aws.String(bucketName),
+		PublicAccessBlockConfiguration: &types.PublicAccessBlockConfiguration{
+			BlockPublicAcls:       &blockFalse,
+			IgnorePublicAcls:      &blockFalse,
+			BlockPublicPolicy:     &blockFalse,
+			RestrictPublicBuckets: &blockFalse,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to disable public access block: %v", err)
+	}
+	return nil
+}
+
+func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	_, err := s3Client.DeleteBucketPolicy(ctx, &s3.DeleteBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to delete bucket policy: %v", err)
+	}
+	return nil
+}
+
+func ValidateBucketName(name string) bool {
+	var (
+		whitelist  = "a-zA-Z0-9-"
+		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
+	)
+	return !disallowed.MatchString(name)
 }
