@@ -173,7 +173,6 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			continue
 		}
 
-
 		err = helpers.EnableReplication(ctx, s3Client, fullBucketName, replicationBucketName, replicationRoleArn)
 		if err != nil {
 			updateStatus(bucketsStatus, replicationBucketName, err.Error())
