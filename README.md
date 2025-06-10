@@ -35,6 +35,9 @@ AWS_PROFILE=duracloudexp make deploy stack=duracloud-lyrasis
 # get the support user access key and secret
 AWS_PROFILE=duracloudexp make creds stack=duracloud-lyrasis
 
+# trigger: test bucket creation
+AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
+
 # output logs (optional: interval=30m, default is 5m)
 AWS_PROFILE=duracloudexp make logs func=BucketRequestedFunction stack=duracloud-lyrasis
 
@@ -46,27 +49,9 @@ AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
 - Setting `stack` uniquely allows for multiple deployments to the same account.
 - Created resources are prefixed with the `stack` name.
 
-## Testing functions
+## Utility tasks
 
-### BucketRequestedFunction
-
-Local testing can be run using `make invoke`:
-
-```bash
-# local testing
-make invoke func=BucketRequestedFunction event=events/bucket-requested/event.json
-```
-
-This can be used to test incoming event payloads.
-
-```bash
-# trigger: test bucket creation
-AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
-```
-
-## Utility scripts
-
-The `bucket-manager` script can be used to create, clear and delete buckets:
+The `make bucket` task can be used to create, clear and delete buckets:
 
 ```bash
 AWS_PROFILE=duracloudexp make bucket action=list
