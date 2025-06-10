@@ -41,7 +41,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	ctx = context.WithValue(ctx, helpers.AWSContextKey, awsCtx)
 
 	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
-	bucketLimit, _ := helpers.GetBucketRequestLimit(os.Getenv("MAX_BUCKETS_PER_REQUEST"))
+	bucketLimit, _ := helpers.GetBucketRequestLimit(os.Getenv("S3_MAX_BUCKETS_PER_REQUEST"))
 	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
 
 	var s3Event events.S3Event
@@ -164,6 +164,15 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			_ = rollback(ctx, s3Client, replicationBucketName)
 			continue
 		}
+
+		err = helpers.EnableVersioning(ctx, s3Client, replicationBucketName)
+		if err != nil {
+			updateStatus(bucketsStatus, replicationBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
+			continue
+		}
+
 
 		err = helpers.EnableReplication(ctx, s3Client, fullBucketName, replicationBucketName, replicationRoleArn)
 		if err != nil {

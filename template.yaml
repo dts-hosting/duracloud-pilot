@@ -78,6 +78,7 @@ Resources:
                 - s3:PutBucketAcl
                 # Replication configuration
                 - s3:PutBucketReplication
+                - s3:PutReplicationConfiguration
                 # Storage tier management
                 - s3:PutBucketLifecycleConfiguration
               Resource: "arn:aws:s3:::*"

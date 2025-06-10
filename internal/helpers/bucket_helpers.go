@@ -203,22 +203,17 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string
 }
 
 func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	daysToIA := int32(30)
-	daysToGlacier := int32(60)
+	daysToGlacier := int32(2)
 
 	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(bucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
 			Rules: []types.LifecycleRule{
 				{
-					ID:     aws.String("IAThenGlacierIR"),
+					ID:     aws.String("TransitionToGlacierIRIn2Days"),
 					Status: types.ExpirationStatusEnabled,
 					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")}, // All objects
 					Transitions: []types.Transition{
-						{
-							Days:         &daysToIA,
-							StorageClass: types.TransitionStorageClassStandardIa,
-						},
 						{
 							Days:         &daysToGlacier,
 							StorageClass: types.TransitionStorageClassGlacierIr,
