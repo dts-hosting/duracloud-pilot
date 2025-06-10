@@ -23,6 +23,9 @@ const (
 	ManagedSuffix         = "-managed"
 	PublicSuffix          = "-public"
 	ReplicationSuffix     = "-replication"
+
+	LifeCycleTransitionToGlacierDays = 3
+	NonCurrentVersionExpirationDays  = 2
 )
 
 func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) error {
@@ -43,7 +46,7 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 }
 
 func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	// apply a default deny-all policy
+	// apply a default deny-upload policy
 	policy := map[string]interface{}{
 		"Version": "2012-10-17",
 		"Statement": []map[string]interface{}{
@@ -73,17 +76,18 @@ func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName st
 }
 
 func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	days := int32(7)
+	daysToExpiration := int32(NonCurrentVersionExpirationDays)
+
 	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(bucketName),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
 			Rules: []types.LifecycleRule{
 				{
-					ID:     aws.String("ExpireOldVersionsAfter7Days"),
+					ID:     aws.String("ExpireOldVersionsAfter1Day"),
 					Status: types.ExpirationStatusEnabled,
-					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")}, // Applies to all objects
+					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
 					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-						NoncurrentDays: &days,
+						NoncurrentDays: &daysToExpiration,
 					},
 				},
 			},
@@ -91,6 +95,31 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 	})
 	if err != nil {
 		return fmt.Errorf("failed to set lifecycle rule: %v", err)
+	}
+	return nil
+}
+
+func AddLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string, storageClass types.TransitionStorageClass, transitionDays int32) error {
+	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
+		Bucket: aws.String(bucketName),
+		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
+			Rules: []types.LifecycleRule{
+				{
+					ID:     aws.String(fmt.Sprintf("TransitionTo%s", storageClass)),
+					Status: types.ExpirationStatusEnabled,
+					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
+					Transitions: []types.Transition{
+						{
+							Days:         &transitionDays,
+							StorageClass: storageClass,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to configure lifecycle: %v", err)
 	}
 	return nil
 }
@@ -122,6 +151,16 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 		return fmt.Errorf("failed to apply public bucket policy: %v", err)
 	}
 	return nil
+}
+
+func AddReplicationLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	daysToGlacier := int32(LifeCycleTransitionToGlacierDays)
+	return AddLifecycle(ctx, s3Client, bucketName, types.TransitionStorageClassDeepArchive, daysToGlacier)
+}
+
+func AddStandardLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+	daysToGlacier := int32(LifeCycleTransitionToGlacierDays)
+	return AddLifecycle(ctx, s3Client, bucketName, types.TransitionStorageClassGlacierIr, daysToGlacier)
 }
 
 func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
@@ -200,33 +239,6 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string
 
 	if err != nil {
 		return fmt.Errorf("failed to enable inventory configuration: %v", err)
-	}
-	return nil
-}
-
-func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	daysToGlacier := int32(2)
-
-	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
-		Bucket: aws.String(bucketName),
-		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
-			Rules: []types.LifecycleRule{
-				{
-					ID:     aws.String("TransitionToGlacierIRIn2Days"),
-					Status: types.ExpirationStatusEnabled,
-					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")}, // All objects
-					Transitions: []types.Transition{
-						{
-							Days:         &daysToGlacier,
-							StorageClass: types.TransitionStorageClassGlacierIr,
-						},
-					},
-				},
-			},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to configure lifecycle: %v", err)
 	}
 	return nil
 }
@@ -416,9 +428,9 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 	key := fmt.Sprintf("logs/bucket-request-log-%s.txt", timestamp)
 
 	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-		Body:   reader,
+		Bucket:      aws.String(bucketName),
+		Key:         aws.String(key),
+		Body:        reader,
 		ContentType: aws.String("text/plain"),
 	})
 	if err != nil {

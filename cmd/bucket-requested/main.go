@@ -79,14 +79,14 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			continue
 		}
 
-		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
+		err = helpers.AddDenyUploadPolicy(ctx, s3Client, fullBucketName)
 		if err != nil {
 			updateStatus(bucketsStatus, fullBucketName, err.Error())
 			_ = rollback(ctx, s3Client, fullBucketName)
 			continue
 		}
 
-		err = helpers.AddDenyUploadPolicy(ctx, s3Client, fullBucketName)
+		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
 		if err != nil {
 			updateStatus(bucketsStatus, fullBucketName, err.Error())
 			_ = rollback(ctx, s3Client, fullBucketName)
@@ -130,7 +130,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			}
 
 		} else {
-			err := helpers.EnableLifecycle(ctx, s3Client, fullBucketName)
+			err := helpers.AddStandardLifecycle(ctx, s3Client, fullBucketName)
 			if err != nil {
 				updateStatus(bucketsStatus, fullBucketName, err.Error())
 				_ = rollback(ctx, s3Client, fullBucketName)
@@ -175,7 +175,23 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			continue
 		}
 
+		err = helpers.AddExpiration(ctx, s3Client, replicationBucketName)
+		if err != nil {
+			updateStatus(bucketsStatus, replicationBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
+			continue
+		}
+
 		err = helpers.EnableReplication(ctx, s3Client, fullBucketName, replicationBucketName, replicationRoleArn)
+		if err != nil {
+			updateStatus(bucketsStatus, replicationBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
+			continue
+		}
+
+		err = helpers.AddReplicationLifecycle(ctx, s3Client, replicationBucketName)
 		if err != nil {
 			updateStatus(bucketsStatus, replicationBucketName, err.Error())
 			_ = rollback(ctx, s3Client, fullBucketName)
