@@ -115,20 +115,12 @@ func handler(ctx context.Context, event json.RawMessage) error {
 				continue
 			}
 
-			err = helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
-			if err != nil {
-				updateStatus(bucketsStatus, fullBucketName, err.Error())
-				_ = rollback(ctx, s3Client, fullBucketName)
-				continue
-			}
-
 			err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Public")
 			if err != nil {
 				updateStatus(bucketsStatus, fullBucketName, err.Error())
 				_ = rollback(ctx, s3Client, fullBucketName)
 				continue
 			}
-
 		} else {
 			err := helpers.AddStandardLifecycle(ctx, s3Client, fullBucketName)
 			if err != nil {
@@ -204,6 +196,16 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			updateStatus(bucketsStatus, fullBucketName, err.Error())
 			_ = rollback(ctx, s3Client, fullBucketName)
 			continue
+		}
+
+		// Note: we have to do this after removing the temporary DENY policy
+		if helpers.IsPublicBucket(fullBucketName) {
+			err = helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
+			if err != nil {
+				updateStatus(bucketsStatus, fullBucketName, err.Error())
+				_ = rollback(ctx, s3Client, fullBucketName)
+				continue
+			}
 		}
 
 		message = fmt.Sprintf("Created bucket %s", fullBucketName)

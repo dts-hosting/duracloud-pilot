@@ -83,7 +83,7 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
 			Rules: []types.LifecycleRule{
 				{
-					ID:     aws.String("ExpireOldVersionsAfter1Day"),
+					ID:     aws.String("ExpireOldVersions"),
 					Status: types.ExpirationStatusEnabled,
 					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
 					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
