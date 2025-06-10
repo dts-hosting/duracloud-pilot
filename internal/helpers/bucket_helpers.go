@@ -414,6 +414,7 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 	now := time.Now().UTC()
 	timestamp := now.Format(time.RFC3339)
 	key := fmt.Sprintf("logs/bucket-request-log-%s.txt", timestamp)
+
 	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(key),
@@ -421,7 +422,7 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 		ContentType: aws.String("text/plain"),
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to write bucket status: %v", err)
+		return fmt.Errorf("failed to write bucket status: %v", err)
 	}
 
 	return nil
