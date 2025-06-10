@@ -39,7 +39,7 @@ AWS_PROFILE=duracloudexp make creds stack=duracloud-lyrasis
 AWS_PROFILE=duracloudexp make logs func=BucketRequestedFunction stack=duracloud-lyrasis
 
 # destroy
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh duracloud-lyrasis-bucket-requested empty
+AWS_PROFILE=duracloudexp make bucket action=empty bucket=duracloud-lyrasis-bucket-requested
 AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
 ```
 
@@ -69,8 +69,8 @@ AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyras
 The `bucket-manager` script can be used to create, clear and delete buckets:
 
 ```bash
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh list
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh create duracloud-pilot-bucket1
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh empty duracloud-pilot-bucket1
-AWS_PROFILE=duracloudexp ./scripts/bucket-manager.sh delete duracloud-pilot-bucket1
+AWS_PROFILE=duracloudexp make bucket action=list
+AWS_PROFILE=duracloudexp make bucket action=create bucket=duracloud-pilot-bucket1
+AWS_PROFILE=duracloudexp make bucket action=empty bucket=duracloud-pilot-bucket1
+AWS_PROFILE=duracloudexp make bucket action=delete bucket=duracloud-pilot-bucket1
 ```

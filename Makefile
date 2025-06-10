@@ -10,6 +10,10 @@ else
     $(error Unsupported architecture $(ARCH))
 endif
 
+.PHONY: bucket
+bucket: ## Run a bucket manager script command
+	@./scripts/bucket-manager.sh $(action) $(bucket)
+
 .PHONY: build
 build: ## Build the project (images, artifacts, etc.)
 	@sam build --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH) && sam validate
