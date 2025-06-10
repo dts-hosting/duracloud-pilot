@@ -59,6 +59,8 @@ Resources:
               Action:
                 - s3:CreateBucket
                 - s3:GetObject
+                # Logging
+                - s3:PutObject
                 # Basic bucket policy and tagging
                 - s3:PutBucketTagging
                 - s3:PutBucketPolicy

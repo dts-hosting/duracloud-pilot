@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -400,4 +402,27 @@ func ValidateBucketName(name string) bool {
 		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
 	)
 	return !disallowed.MatchString(name)
+}
+
+func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, log map[string]string) error {
+	var builder strings.Builder
+	for bucket, status := range log {
+		builder.WriteString(fmt.Sprintf("[%s] %s\n", bucket, status))
+	}
+	logContent := builder.String()
+	reader := bytes.NewReader([]byte(logContent))
+	now := time.Now().UTC()
+	timestamp := now.Format(time.RFC3339)
+	key := fmt.Sprintf("logs/bucket-request-log-%s.txt", timestamp)
+	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   reader,
+		ContentType: aws.String("text/plain"),
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to write bucket status: %v", err)
+	}
+
+	return nil
 }

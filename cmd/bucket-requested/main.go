@@ -65,6 +65,8 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
 	bucketsStatus := make(map[string]string)
+	managedBucketName := fmt.Sprintf("%s%s", bucketPrefix, helpers.ManagedSuffix)
+
 	for _, requestedBucketName := range requestedBuckets {
 		fullBucketName := fmt.Sprintf("%s-%s", bucketPrefix, requestedBucketName)
 		replicationBucketName := fmt.Sprintf("%s%s", fullBucketName, helpers.ReplicationSuffix)
@@ -192,7 +194,10 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		updateStatus(bucketsStatus, fullBucketName, message)
 	}
 
-	// TODO: reportStatus by iterating `buckets` and upload to s3 (via helper)
+	err = helpers.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
+	if err != nil {
+		log.Printf("Error writing bucket status to managed bucket: %v", err)
+	}
 
 	return nil
 }
