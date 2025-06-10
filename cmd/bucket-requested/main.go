@@ -107,7 +107,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			continue
 		}
 
-		if helpers.IsPublicBucket(bucketName) {
+		if helpers.IsPublicBucket(fullBucketName) {
 			err = helpers.MakePublic(ctx, s3Client, fullBucketName)
 			if err != nil {
 				updateStatus(bucketsStatus, fullBucketName, err.Error())
