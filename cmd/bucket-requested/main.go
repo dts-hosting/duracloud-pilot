@@ -137,7 +137,14 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			continue
 		}
 
-		err = helpers.EnableInventory(ctx, s3Client, fullBucketName)
+		err = helpers.EnableInventory(ctx, s3Client, fullBucketName, managedBucketName)
+		if err != nil {
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
+		}
+
+		err = helpers.EnableLogging(ctx, s3Client, fullBucketName, managedBucketName)
 		if err != nil {
 			updateStatus(bucketsStatus, fullBucketName, err.Error())
 			_ = rollback(ctx, s3Client, fullBucketName)

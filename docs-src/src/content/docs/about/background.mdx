@@ -55,6 +55,12 @@ Principally, these bucket configurations are automatically applied as buckets ar
         [Learn more](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-inventory.html)
     </Card>
 
+    <Card title="Audit">
+        A request log is generated for each user created bucket.
+
+        [Learn more](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerLogs.html)
+    </Card>
+
     <Card title="Replication">
         User uploaded files are copied to Glacier Deep Archive storage for backup and disaster recovery (latter via
         request).
@@ -65,7 +71,7 @@ Principally, these bucket configurations are automatically applied as buckets ar
     <Card title="Public access">
         Buckets can be created as publicly accessible then files will be available using a url. Files will
         be stored in the standard storage tier and not transitioned to Glacier, however replication will still
-        occur and the backup files will be stored in Glacier Deep Archive.
+        occur and the backup files will be stored in Glacier.
 
         [Learn
         more](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
@@ -97,7 +103,7 @@ In addition, these operations are run on a schedule:
     </Card>
 
     <Card title="Audit log">
-        Generated on a weekly basis.
+        Generated and delivered within hours of requests via logging configuration.
     </Card>
 
     <Card title="Storage report">
@@ -105,4 +111,4 @@ In addition, these operations are run on a schedule:
     </Card>
 </CardGrid>
 
-<Aside>Generated files are retained for 7 days.</Aside>
+<Aside>Generated files are retained for 30 days.</Aside>

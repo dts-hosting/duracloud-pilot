@@ -300,6 +300,14 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
+      LifecycleConfiguration:
+        Rules:
+          - Id: "DeleteAfter30Days"
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
 
   S3ManagedBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -308,6 +316,18 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
+          - Sid: "AllowAuditDestination"
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed/audit/*"
+            Condition:
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
           - Sid: "AllowInventoryDestination"
             Effect: Allow
             Principal:
@@ -316,10 +336,10 @@ Resources:
               - s3:PutObject
             Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed/inventory/*"
             Condition:
-              StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
               ArnLike:
                 "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
+              StringEquals:
+                "s3:x-amz-acl": bucket-owner-full-control
 
   SQSFixityChecker:
     Type: AWS::SQS::Queue

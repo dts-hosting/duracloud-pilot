@@ -204,15 +204,14 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
 	return nil
 }
 
-func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string) error {
+func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName string, destBucketName string) error {
 	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
 	if !ok {
 		return fmt.Errorf("error retrieving aws context")
 	}
 
-	var destBucket = fmt.Sprintf("%s%s", bucketName, ManagedSuffix)
 	_, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
-		Bucket: aws.String(bucketName),
+		Bucket: aws.String(srcBucketName),
 		Id:     aws.String("InventoryReport"),
 		InventoryConfiguration: &types.InventoryConfiguration{
 			IsEnabled:              aws.Bool(true),
@@ -224,9 +223,9 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string
 			Destination: &types.InventoryDestination{
 				S3BucketDestination: &types.InventoryS3BucketDestination{
 					AccountId: aws.String(awsCtx.AccountID),
-					Bucket:    aws.String("arn:aws:s3:::" + destBucket),
+					Bucket:    aws.String(fmt.Sprintf("arn:aws:s3:::%s", destBucketName)),
 					Format:    types.InventoryFormatCsv,
-					Prefix:    aws.String("inventory/"),
+					Prefix:    aws.String(fmt.Sprintf("inventory/%s/", srcBucketName)),
 				},
 			},
 			OptionalFields: []types.InventoryOptionalField{
@@ -243,11 +242,27 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, bucketName string
 	return nil
 }
 
-func EnableReplication(ctx context.Context, s3Client *s3.Client, sourceBucketName string, replicationBucketName string, replicationRoleArn string) error {
+func EnableLogging(ctx context.Context, s3Client *s3.Client, srcBucketName string, destBucketName string) error {
+	_, err := s3Client.PutBucketLogging(ctx, &s3.PutBucketLoggingInput{
+		Bucket: aws.String(srcBucketName),
+		BucketLoggingStatus: &types.BucketLoggingStatus{
+			LoggingEnabled: &types.LoggingEnabled{
+				TargetBucket: aws.String(destBucketName),
+				TargetPrefix: aws.String(fmt.Sprintf("audit/%s/", srcBucketName)),
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to enable access logging: %v", err)
+	}
+	return nil
+}
+
+func EnableReplication(ctx context.Context, s3Client *s3.Client, srcBucketName string, replBucketName string, replRoleArn string) error {
 	_, err := s3Client.PutBucketReplication(ctx, &s3.PutBucketReplicationInput{
-		Bucket: aws.String(sourceBucketName),
+		Bucket: aws.String(srcBucketName),
 		ReplicationConfiguration: &types.ReplicationConfiguration{
-			Role: aws.String(replicationRoleArn),
+			Role: aws.String(replRoleArn),
 			Rules: []types.ReplicationRule{
 				{
 					ID:       aws.String("ReplicateAll"),
@@ -255,7 +270,7 @@ func EnableReplication(ctx context.Context, s3Client *s3.Client, sourceBucketNam
 					Priority: aws.Int32(1),
 					Filter:   &types.ReplicationRuleFilter{Prefix: aws.String("")},
 					Destination: &types.Destination{
-						Bucket: aws.String(fmt.Sprintf("arn:aws:s3:::%s", replicationBucketName)),
+						Bucket: aws.String(fmt.Sprintf("arn:aws:s3:::%s", replBucketName)),
 						ReplicationTime: &types.ReplicationTime{
 							Status: types.ReplicationTimeStatusEnabled,
 							Time: &types.ReplicationTimeValue{
