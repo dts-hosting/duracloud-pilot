@@ -234,6 +234,46 @@ func EnableLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string
 	return nil
 }
 
+func EnableReplication(ctx context.Context, s3Client *s3.Client, sourceBucketName string, replicationBucketName string, replicationRoleArn string) error {
+	_, err := s3Client.PutBucketReplication(ctx, &s3.PutBucketReplicationInput{
+		Bucket: aws.String(sourceBucketName),
+		ReplicationConfiguration: &types.ReplicationConfiguration{
+			Role: aws.String(replicationRoleArn),
+			Rules: []types.ReplicationRule{
+				{
+					ID:       aws.String("ReplicateAll"),
+					Status:   types.ReplicationRuleStatusEnabled,
+					Priority: aws.Int32(1),
+					Filter:   &types.ReplicationRuleFilter{Prefix: aws.String("")},
+					Destination: &types.Destination{
+						Bucket: aws.String(fmt.Sprintf("arn:aws:s3:::%s", replicationBucketName)),
+						ReplicationTime: &types.ReplicationTime{
+							Status: types.ReplicationTimeStatusEnabled,
+							Time: &types.ReplicationTimeValue{
+								Minutes: aws.Int32(15),
+							},
+						},
+						Metrics: &types.Metrics{
+							Status: types.MetricsStatusEnabled,
+							EventThreshold: &types.ReplicationTimeValue{
+								Minutes: aws.Int32(15),
+							},
+						},
+					},
+					DeleteMarkerReplication: &types.DeleteMarkerReplication{
+						Status: types.DeleteMarkerReplicationStatusEnabled,
+					},
+				},
+			},
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to enable replication configuration: %v", err)
+	}
+	return nil
+}
+
 func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	_, err := s3Client.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
 		Bucket: aws.String(bucketName),

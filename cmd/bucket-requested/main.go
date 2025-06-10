@@ -42,7 +42,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
 	bucketLimit, _ := helpers.GetBucketRequestLimit(os.Getenv("MAX_BUCKETS_PER_REQUEST"))
-	// TODO: replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
+	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
 
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
@@ -64,116 +64,140 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
-	createdBuckets := make([]string, 0, bucketLimit)
+	bucketsStatus := make(map[string]string)
 	for _, requestedBucketName := range requestedBuckets {
 		fullBucketName := fmt.Sprintf("%s-%s", bucketPrefix, requestedBucketName)
 		replicationBucketName := fmt.Sprintf("%s%s", fullBucketName, helpers.ReplicationSuffix)
+		message := ""
 		log.Printf("Creating buckets: %s [%s]", fullBucketName, replicationBucketName)
 
 		err := helpers.CreateNewBucket(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panicf("Unable to create bucket: %s", err)
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			continue
 		}
-
-		createdBuckets = append(createdBuckets, fullBucketName)
 
 		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
 		err = helpers.AddDenyUploadPolicy(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
 		err = helpers.EnableVersioning(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
 		err = helpers.AddExpiration(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
 		if helpers.IsPublicBucket(bucketName) {
 			err = helpers.MakePublic(ctx, s3Client, fullBucketName)
 			if err != nil {
-				rollback(ctx, s3Client, createdBuckets)
-				log.Panic(err.Error())
+				updateStatus(bucketsStatus, fullBucketName, err.Error())
+				_ = rollback(ctx, s3Client, fullBucketName)
+				continue
 			}
 
 			err = helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
 			if err != nil {
-				rollback(ctx, s3Client, createdBuckets)
-				log.Panic(err.Error())
+				updateStatus(bucketsStatus, fullBucketName, err.Error())
+				_ = rollback(ctx, s3Client, fullBucketName)
+				continue
 			}
 
 			err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Public")
 			if err != nil {
-				rollback(ctx, s3Client, createdBuckets)
-				log.Panic(err.Error())
+				updateStatus(bucketsStatus, fullBucketName, err.Error())
+				_ = rollback(ctx, s3Client, fullBucketName)
+				continue
 			}
 
 		} else {
 			err := helpers.EnableLifecycle(ctx, s3Client, fullBucketName)
 			if err != nil {
-				rollback(ctx, s3Client, createdBuckets)
-				log.Panic(err.Error())
+				updateStatus(bucketsStatus, fullBucketName, err.Error())
+				_ = rollback(ctx, s3Client, fullBucketName)
+				continue
 			}
 		}
 
 		err = helpers.EnableEventBridge(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
 		err = helpers.EnableInventory(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
 		err = helpers.CreateNewBucket(ctx, s3Client, replicationBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, replicationBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
-		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Replication")
+		err = helpers.AddBucketTags(ctx, s3Client, replicationBucketName, bucketPrefix, "Replication")
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, replicationBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
+			continue
+		}
+
+		err = helpers.EnableReplication(ctx, s3Client, fullBucketName, replicationBucketName, replicationRoleArn)
+		if err != nil {
+			updateStatus(bucketsStatus, replicationBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
+			continue
 		}
 
 		err = helpers.RemovePolicy(ctx, s3Client, fullBucketName)
 		if err != nil {
-			rollback(ctx, s3Client, createdBuckets)
-			log.Panic(err.Error())
+			updateStatus(bucketsStatus, fullBucketName, err.Error())
+			_ = rollback(ctx, s3Client, fullBucketName)
+			continue
 		}
 
-		log.Printf("Finished Creating bucket %v", fullBucketName)
+		message = fmt.Sprintf("Created bucket %s", fullBucketName)
+		updateStatus(bucketsStatus, fullBucketName, message)
 	}
+
+	// TODO: reportStatus by iterating `buckets` and upload to s3 (via helper)
 
 	return nil
 }
 
-func rollback(ctx context.Context, s3Client *s3.Client, buckets []string) {
-	for _, createdBucket := range buckets {
-		err := helpers.DeleteBucket(ctx, s3Client, createdBucket)
-		if err != nil {
-			log.Fatalf("Error rolling back previous error. Quiting!")
-		}
-	}
-}
-
 func main() {
 	lambda.Start(handler)
+}
+
+func rollback(ctx context.Context, s3Client *s3.Client, bucket string) error {
+	return helpers.DeleteBucket(ctx, s3Client, bucket)
+}
+
+func updateStatus(buckets map[string]string, bucket string, message string) {
+	buckets[bucket] = message
+	log.Printf("[%s] %s", bucket, message)
 }
