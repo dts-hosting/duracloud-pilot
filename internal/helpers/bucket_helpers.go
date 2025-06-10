@@ -30,7 +30,7 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 			TagSet: []types.Tag{
 				{Key: aws.String("Application"), Value: aws.String("Duracloud")},
 				{Key: aws.String("StackName"), Value: aws.String(stackName)},
-				{Key: aws.String("BucketType"), Value: aws.String("Standard")},
+				{Key: aws.String("BucketType"), Value: aws.String(bucketType)},
 			},
 		},
 	})
