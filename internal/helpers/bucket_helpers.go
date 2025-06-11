@@ -24,6 +24,7 @@ const (
 	PublicSuffix          = "-public"
 	ReplicationSuffix     = "-replication"
 
+	ApplicationTagValue              = "DuraCloud"
 	LifeCycleTransitionToGlacierDays = 3
 	NonCurrentVersionExpirationDays  = 2
 )
@@ -33,7 +34,7 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 		Bucket: aws.String(bucketName),
 		Tagging: &types.Tagging{
 			TagSet: []types.Tag{
-				{Key: aws.String("Application"), Value: aws.String("Duracloud")},
+				{Key: aws.String("Application"), Value: aws.String(ApplicationTagValue)},
 				{Key: aws.String("StackName"), Value: aws.String(stackName)},
 				{Key: aws.String("BucketType"), Value: aws.String(bucketType)},
 			},
