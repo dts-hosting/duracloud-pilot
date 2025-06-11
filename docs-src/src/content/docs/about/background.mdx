@@ -37,14 +37,14 @@ Principally, these bucket configurations are automatically applied as buckets ar
 
 <CardGrid>
     <Card title="Versioning">
-        Versioning is enabled. This supports file restore for up to 7 days post update (via request).
+        Versioning is enabled. This supports file restore for up to 2 days post update (via request).
 
         [Learn more](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html)
     </Card>
 
     <Card title="Lifecycle transitions">
-        Files are uploaded to the Infrequent Access storage tier and transition to the Glacier Instant
-        Retrieval tier after 7 days.
+        Files are uploaded to the standard storage tier and transition to the Glacier Instant
+        Retrieval tier after 3 days.
 
         [Learn more](https://aws.amazon.com/s3/storage-classes/)
     </Card>
@@ -55,6 +55,12 @@ Principally, these bucket configurations are automatically applied as buckets ar
         [Learn more](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-inventory.html)
     </Card>
 
+    <Card title="Audit">
+        A request log is generated for each user created bucket.
+
+        [Learn more](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ServerLogs.html)
+    </Card>
+
     <Card title="Replication">
         User uploaded files are copied to Glacier Deep Archive storage for backup and disaster recovery (latter via
         request).
@@ -63,14 +69,16 @@ Principally, these bucket configurations are automatically applied as buckets ar
     </Card>
 
     <Card title="Public access">
-        Buckets can be created as publicly accessible.
+        Buckets can be created as publicly accessible then files will be available using a url. Files will
+        be stored in the standard storage tier and not transitioned to Glacier, however replication will still
+        occur and the backup files will be stored in Glacier.
 
         [Learn
         more](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
     </Card>
 
     <Card title="Selectable region">
-        Per account files can be stored in any AWS region (supported by the infrastructure team or service provider).
+        Files can be stored in any AWS region supported by the infrastructure team or service provider.
 
         [Learn more](https://aws.amazon.com/about-aws/global-infrastructure/regions_az/)
     </Card>
@@ -83,7 +91,7 @@ Principally, these bucket configurations are automatically applied as buckets ar
 
 ### Scheduled tasks
 
-In addition these operations are run on a schedule:
+In addition, these operations are run on a schedule:
 
 <CardGrid>
     <Card title="Fixity checks">
@@ -95,7 +103,7 @@ In addition these operations are run on a schedule:
     </Card>
 
     <Card title="Audit log">
-        Generated on a weekly basis.
+        Generated and delivered within hours of requests via logging configuration.
     </Card>
 
     <Card title="Storage report">
@@ -103,4 +111,4 @@ In addition these operations are run on a schedule:
     </Card>
 </CardGrid>
 
-<Aside>Generated files are retained for 7 days.</Aside>
+<Aside>Generated files are retained for 30 days.</Aside>

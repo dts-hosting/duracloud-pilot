@@ -42,6 +42,7 @@ Resources:
         Variables:
           S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
           S3_INVENTORY_DEST_BUCKET: !Ref S3ManagedBucket
+          S3_MAX_BUCKETS_PER_REQUEST: 5
           S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
       ImageUri:
         !If [
@@ -57,19 +58,32 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:CreateBucket
+                - s3:DeleteBucket
                 - s3:GetObject
+                - s3:PutObject
+                # Logging
+                - s3:PutBucketLogging
                 # Basic bucket policy and tagging
-                - s3:PutBucketTagging
+                - s3:DeleteBucketPolicy
                 - s3:PutBucketPolicy
+                - s3:PutBucketTagging
+                # Bucket Versioning
+                - s3:PutBucketVersioning
+                # Bucket Lifecycle Configuration
+                - s3:PutLifecycleConfiguration
                 # EventBridge notifications
+                - s3:PutBucketNotification
                 - s3:PutBucketNotificationConfiguration
                 # Inventory configuration
                 - s3:PutBucketInventoryConfiguration
+                - s3:PutInventoryConfiguration
                 # Public access settings
-                - s3:PutBucketPublicAccessBlock
                 - s3:PutBucketAcl
+                - s3:PutBucketOwnershipControls
+                - s3:PutBucketPublicAccessBlock
                 # Replication configuration
                 - s3:PutBucketReplication
+                - s3:PutReplicationConfiguration
                 # Storage tier management
                 - s3:PutBucketLifecycleConfiguration
               Resource: "arn:aws:s3:::*"
@@ -286,6 +300,14 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
+      LifecycleConfiguration:
+        Rules:
+          - Id: "DeleteAfter30Days"
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
 
   S3ManagedBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -294,6 +316,18 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
+          - Sid: "AllowAuditDestination"
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed/audit/*"
+            Condition:
+              ArnLike:
+                "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
           - Sid: "AllowInventoryDestination"
             Effect: Allow
             Principal:
@@ -302,10 +336,10 @@ Resources:
               - s3:PutObject
             Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed/inventory/*"
             Condition:
-              StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
               ArnLike:
                 "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
+              StringEquals:
+                "s3:x-amz-acl": bucket-owner-full-control
 
   SQSFixityChecker:
     Type: AWS::SQS::Queue

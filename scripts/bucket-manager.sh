@@ -17,6 +17,24 @@ if [ "$ACTION" != "list" ] && [ -z "$BUCKET_NAME" ]; then
     exit 1
 fi
 
+empty_bucket_versions() {
+    aws s3api list-object-versions --bucket "$BUCKET_NAME" \
+    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json > tmp_objects.json
+
+    if [ -s tmp_objects.json ]; then
+        aws s3api delete-objects --bucket "$BUCKET_NAME" --delete file://tmp_objects.json
+    fi
+
+    aws s3api list-object-versions --bucket "$BUCKET_NAME" \
+    --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json > tmp_markers.json
+
+    if [ -s tmp_markers.json ]; then
+        aws s3api delete-objects --bucket "$BUCKET_NAME" --delete file://tmp_markers.json
+    fi
+
+    rm -f tmp_objects.json tmp_markers.json
+}
+
 case $ACTION in
     list)
         aws s3api list-buckets
@@ -25,6 +43,7 @@ case $ACTION in
         aws s3 mb s3://$BUCKET_NAME
     ;;
     empty)
+        empty_bucket_versions
         aws s3 rm s3://$BUCKET_NAME --recursive
     ;;
     delete)

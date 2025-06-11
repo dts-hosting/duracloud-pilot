@@ -5,6 +5,7 @@
 .sam-translate/
 .vscode/settings.json
 *.html
+buckets.txt
 dist
 docs/
 !docs-src/src/content/docs/
