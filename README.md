@@ -59,3 +59,11 @@ AWS_PROFILE=duracloudexp make bucket action=create bucket=duracloud-pilot-bucket
 AWS_PROFILE=duracloudexp make bucket action=empty bucket=duracloud-pilot-bucket1
 AWS_PROFILE=duracloudexp make bucket action=delete bucket=duracloud-pilot-bucket1
 ```
+
+## Tests
+
+The stack indicated by `STACK_NAME` must be deployed first.
+
+```bash
+AWS_PROFILE=duracloudexp make test stack=duracloud-lyrasis
+```

@@ -25,6 +25,7 @@ const (
 	ReplicationSuffix     = "-replication"
 
 	ApplicationTagValue              = "DuraCloud"
+	BucketRequestedFileErrorKey      = "error-processing-bucket-requested-file"
 	LifeCycleTransitionToGlacierDays = 3
 	NonCurrentVersionExpirationDays  = 2
 )
