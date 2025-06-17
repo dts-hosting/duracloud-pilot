@@ -68,156 +68,26 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
+	resultChan := make(chan map[string]string, len(requestedBuckets))
+
 	for _, requestedBucketName := range requestedBuckets {
-		fullBucketName := fmt.Sprintf("%s-%s", bucketPrefix, requestedBucketName)
-		replicationBucketName := fmt.Sprintf("%s%s", fullBucketName, helpers.ReplicationSuffix)
-		message := ""
-		log.Printf("Creating buckets: %s [%s]", fullBucketName, replicationBucketName)
-
-		err := helpers.CreateNewBucket(ctx, s3Client, fullBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			continue
-		}
-
-		err = helpers.AddDenyUploadPolicy(ctx, s3Client, fullBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Standard")
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.EnableVersioning(ctx, s3Client, fullBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.AddExpiration(ctx, s3Client, fullBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		if helpers.IsPublicBucket(fullBucketName) {
-			err = helpers.MakePublic(ctx, s3Client, fullBucketName)
-			if err != nil {
-				updateStatus(bucketsStatus, fullBucketName, err.Error())
-				_ = rollback(ctx, s3Client, fullBucketName)
-				continue
+		go func(bucketName string) {
+			params := helpers.ProcessBucketParams{
+				RequestedBucketName: bucketName,
+				BucketPrefix:        bucketPrefix,
+				ManagedBucketName:   managedBucketName,
+				ReplicationRoleArn:  replicationRoleArn,
+				ResultChan:          resultChan,
 			}
+			processBucket(ctx, s3Client, params)
+		}(requestedBucketName)
+	}
 
-			err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, bucketPrefix, "Public")
-			if err != nil {
-				updateStatus(bucketsStatus, fullBucketName, err.Error())
-				_ = rollback(ctx, s3Client, fullBucketName)
-				continue
-			}
-		} else {
-			err := helpers.AddStandardLifecycle(ctx, s3Client, fullBucketName)
-			if err != nil {
-				updateStatus(bucketsStatus, fullBucketName, err.Error())
-				_ = rollback(ctx, s3Client, fullBucketName)
-				continue
-			}
+	for i := 0; i < len(requestedBuckets); i++ {
+		results := <-resultChan
+		for bucket, status := range results {
+			bucketsStatus[bucket] = status
 		}
-
-		err = helpers.EnableEventBridge(ctx, s3Client, fullBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.EnableInventory(ctx, s3Client, fullBucketName, managedBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.EnableLogging(ctx, s3Client, fullBucketName, managedBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.CreateNewBucket(ctx, s3Client, replicationBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, replicationBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		err = helpers.AddBucketTags(ctx, s3Client, replicationBucketName, bucketPrefix, "Replication")
-		if err != nil {
-			updateStatus(bucketsStatus, replicationBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			_ = rollback(ctx, s3Client, replicationBucketName)
-			continue
-		}
-
-		err = helpers.EnableVersioning(ctx, s3Client, replicationBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, replicationBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			_ = rollback(ctx, s3Client, replicationBucketName)
-			continue
-		}
-
-		err = helpers.AddExpiration(ctx, s3Client, replicationBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, replicationBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			_ = rollback(ctx, s3Client, replicationBucketName)
-			continue
-		}
-
-		err = helpers.EnableReplication(ctx, s3Client, fullBucketName, replicationBucketName, replicationRoleArn)
-		if err != nil {
-			updateStatus(bucketsStatus, replicationBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			_ = rollback(ctx, s3Client, replicationBucketName)
-			continue
-		}
-
-		err = helpers.AddReplicationLifecycle(ctx, s3Client, replicationBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, replicationBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			_ = rollback(ctx, s3Client, replicationBucketName)
-			continue
-		}
-
-		err = helpers.RemovePolicy(ctx, s3Client, fullBucketName)
-		if err != nil {
-			updateStatus(bucketsStatus, fullBucketName, err.Error())
-			_ = rollback(ctx, s3Client, fullBucketName)
-			continue
-		}
-
-		// Note: we have to do this after removing the temporary DENY policy
-		if helpers.IsPublicBucket(fullBucketName) {
-			err = helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
-			if err != nil {
-				updateStatus(bucketsStatus, fullBucketName, err.Error())
-				_ = rollback(ctx, s3Client, fullBucketName)
-				continue
-			}
-		}
-
-		message = fmt.Sprintf("Created bucket %s", fullBucketName)
-		updateStatus(bucketsStatus, fullBucketName, message)
 	}
 
 	err = helpers.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
@@ -232,11 +102,177 @@ func main() {
 	lambda.Start(handler)
 }
 
-func rollback(ctx context.Context, s3Client *s3.Client, bucket string) error {
-	return helpers.DeleteBucket(ctx, s3Client, bucket)
+func processBucket(ctx context.Context, s3Client *s3.Client, params helpers.ProcessBucketParams) {
+	localStatus := make(map[string]string)
+	fullBucketName := fmt.Sprintf("%s-%s", params.BucketPrefix, params.RequestedBucketName)
+	replicationBucketName := fmt.Sprintf("%s%s", fullBucketName, helpers.ReplicationSuffix)
+	log.Printf("Creating buckets: %s [%s]", fullBucketName, replicationBucketName)
+
+	err := helpers.CreateNewBucket(ctx, s3Client, fullBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.AddDenyUploadPolicy(ctx, s3Client, fullBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, params.BucketPrefix, "Standard")
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.EnableVersioning(ctx, s3Client, fullBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.AddExpiration(ctx, s3Client, fullBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	if helpers.IsPublicBucket(fullBucketName) {
+		err = helpers.MakePublic(ctx, s3Client, fullBucketName)
+		if err != nil {
+			localStatus[fullBucketName] = err.Error()
+			_ = rollback(ctx, s3Client, fullBucketName)
+			params.ResultChan <- localStatus
+			return
+		}
+
+		err = helpers.AddBucketTags(ctx, s3Client, fullBucketName, params.BucketPrefix, "Public")
+		if err != nil {
+			localStatus[fullBucketName] = err.Error()
+			_ = rollback(ctx, s3Client, fullBucketName)
+			params.ResultChan <- localStatus
+			return
+		}
+	} else {
+		err := helpers.AddStandardLifecycle(ctx, s3Client, fullBucketName)
+		if err != nil {
+			localStatus[fullBucketName] = err.Error()
+			_ = rollback(ctx, s3Client, fullBucketName)
+			params.ResultChan <- localStatus
+			return
+		}
+	}
+
+	err = helpers.EnableEventBridge(ctx, s3Client, fullBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.EnableInventory(ctx, s3Client, fullBucketName, params.ManagedBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.EnableLogging(ctx, s3Client, fullBucketName, params.ManagedBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.CreateNewBucket(ctx, s3Client, replicationBucketName)
+	if err != nil {
+		localStatus[replicationBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.AddBucketTags(ctx, s3Client, replicationBucketName, params.BucketPrefix, "Replication")
+	if err != nil {
+		localStatus[replicationBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		_ = rollback(ctx, s3Client, replicationBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.EnableVersioning(ctx, s3Client, replicationBucketName)
+	if err != nil {
+		localStatus[replicationBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		_ = rollback(ctx, s3Client, replicationBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.AddExpiration(ctx, s3Client, replicationBucketName)
+	if err != nil {
+		localStatus[replicationBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		_ = rollback(ctx, s3Client, replicationBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.EnableReplication(ctx, s3Client, fullBucketName, replicationBucketName, params.ReplicationRoleArn)
+	if err != nil {
+		localStatus[replicationBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		_ = rollback(ctx, s3Client, replicationBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.AddReplicationLifecycle(ctx, s3Client, replicationBucketName)
+	if err != nil {
+		localStatus[replicationBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		_ = rollback(ctx, s3Client, replicationBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	err = helpers.RemovePolicy(ctx, s3Client, fullBucketName)
+	if err != nil {
+		localStatus[fullBucketName] = err.Error()
+		_ = rollback(ctx, s3Client, fullBucketName)
+		params.ResultChan <- localStatus
+		return
+	}
+
+	// Note: we have to do this after removing the temporary DENY policy
+	if helpers.IsPublicBucket(fullBucketName) {
+		err = helpers.AddPublicPolicy(ctx, s3Client, fullBucketName)
+		if err != nil {
+			localStatus[fullBucketName] = err.Error()
+			_ = rollback(ctx, s3Client, fullBucketName)
+			params.ResultChan <- localStatus
+			return
+		}
+	}
+
+	localStatus[fullBucketName] = fmt.Sprintf("Created bucket %s", fullBucketName)
+	params.ResultChan <- localStatus
 }
 
-func updateStatus(buckets map[string]string, bucket string, message string) {
-	buckets[bucket] = message
-	log.Printf("[%s] %s", bucket, message)
+func rollback(ctx context.Context, s3Client *s3.Client, bucket string) error {
+	return helpers.DeleteBucket(ctx, s3Client, bucket)
 }
