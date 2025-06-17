@@ -51,13 +51,17 @@ func (w *S3EventBridgeEvent) IsRestrictedBucket() bool {
 }
 
 // UnwrapS3EventBridgeEvents extracts all S3 events from the SQS message
-func (w *SQSEventWrapper) UnwrapS3EventBridgeEvents() []S3EventBridgeEvent {
+func (w *SQSEventWrapper) UnwrapS3EventBridgeEvents() ([]S3EventBridgeEvent, []events.SQSBatchItemFailure) {
 	var records []S3EventBridgeEvent
+	var failedRecords []events.SQSBatchItemFailure
 
 	for _, record := range w.Event.Records {
 		var event S3EventBridgeEvent
 		if err := json.Unmarshal([]byte(record.Body), &event); err != nil {
 			log.Printf("Failed to parse EventBridge event from SQS message: %v", err)
+			failedRecords = append(failedRecords, events.SQSBatchItemFailure{
+				ItemIdentifier: record.MessageId,
+			})
 			continue
 		}
 
@@ -66,5 +70,5 @@ func (w *SQSEventWrapper) UnwrapS3EventBridgeEvents() []S3EventBridgeEvent {
 		}
 	}
 
-	return records
+	return records, failedRecords
 }
