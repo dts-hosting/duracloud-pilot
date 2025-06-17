@@ -30,6 +30,14 @@ const (
 	NonCurrentVersionExpirationDays  = 2
 )
 
+type ProcessBucketParams struct {
+	RequestedBucketName string
+	BucketPrefix        string
+	ManagedBucketName   string
+	ReplicationRoleArn  string
+	ResultChan          chan<- map[string]string
+}
+
 func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) error {
 	_, err := s3Client.PutBucketTagging(ctx, &s3.PutBucketTaggingInput{
 		Bucket: aws.String(bucketName),

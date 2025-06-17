@@ -66,6 +66,7 @@ pull: ## Pull required docker images
 test: ## Run all tests
 	@STACK_NAME=$(stack) go test -v ./...
 	@./scripts/bucket-manager.sh empty $(stack)-bucket-requested > /dev/null
+	@./scripts/bucket-manager.sh empty $(stack)-managed > /dev/null
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
