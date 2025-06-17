@@ -19,17 +19,21 @@ fi
 
 empty_bucket_versions() {
     aws s3api list-object-versions --bucket "$BUCKET_NAME" \
-    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json > tmp_objects.json
+    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId} || `[]`}' --output json > tmp_objects.json
 
     if [ -s tmp_objects.json ]; then
-        aws s3api delete-objects --bucket "$BUCKET_NAME" --delete file://tmp_objects.json
+        if jq -e '.Objects != null and (.Objects | length) > 0' tmp_objects.json > /dev/null; then
+            aws s3api delete-objects --bucket "$BUCKET_NAME" --delete file://tmp_objects.json
+        fi
     fi
 
     aws s3api list-object-versions --bucket "$BUCKET_NAME" \
-    --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}' --output json > tmp_markers.json
+    --query '{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId} || `[]`}' --output json > tmp_markers.json
 
     if [ -s tmp_markers.json ]; then
-        aws s3api delete-objects --bucket "$BUCKET_NAME" --delete file://tmp_markers.json
+        if jq -e '.Objects != null and (.Objects | length) > 0' tmp_markers.json > /dev/null; then
+            aws s3api delete-objects --bucket "$BUCKET_NAME" --delete file://tmp_markers.json
+        fi
     fi
 
     rm -f tmp_objects.json tmp_markers.json
