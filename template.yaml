@@ -322,6 +322,9 @@ Resources:
   #      BatchSize: 10
   #      EventSourceArn: !GetAtt SQSFixityChecker.Arn
   #      FunctionName: !Ref FixityCheckerFunction
+  #      FunctionResponseTypes:
+  #        - ReportBatchItemFailures
+  #      MaximumBatchingWindowInSeconds: 5
 
   #  LambdaSQSObjectCreatedSource:
   #    Type: AWS::Lambda::EventSourceMapping
@@ -329,6 +332,9 @@ Resources:
   #      BatchSize: 10
   #      EventSourceArn: !GetAtt SQSObjectCreated.Arn
   #      FunctionName: !Ref FileUploadedFunction
+  #      FunctionResponseTypes:
+  #        - ReportBatchItemFailures
+  #      MaximumBatchingWindowInSeconds: 5
 
   LambdaSQSObjectDeletedSource:
     Type: AWS::Lambda::EventSourceMapping
@@ -336,6 +342,8 @@ Resources:
       BatchSize: 10
       EventSourceArn: !GetAtt SQSObjectDeleted.Arn
       FunctionName: !Ref FileDeletedFunction
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
       MaximumBatchingWindowInSeconds: 5
 
   LogsBucketRequestedFunction:

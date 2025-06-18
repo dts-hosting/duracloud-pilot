@@ -21,55 +21,60 @@ type S3EventBridgeEvent struct {
 	} `json:"detail"`
 }
 
+type S3EventBridgeEventWithMessageId struct {
+	MessageId string
+	S3EventBridgeEvent
+}
+
 // SQSEventWrapper wraps an SQSEvent
 type SQSEventWrapper struct {
 	Event *events.SQSEvent
 }
 
 // BucketName extracts the bucket name
-func (w *S3EventBridgeEvent) BucketName() string {
-	return w.Detail.Bucket.Name
+func (e *S3EventBridgeEvent) BucketName() string {
+	return e.Detail.Bucket.Name
 }
 
 // ObjectKey extracts the object key
-func (w *S3EventBridgeEvent) ObjectKey() string {
-	return w.Detail.Object.Key
+func (e *S3EventBridgeEvent) ObjectKey() string {
+	return e.Detail.Object.Key
 }
 
-// IsObjectCreatedEvent checks if the event is an object creation event
-func (w *S3EventBridgeEvent) IsObjectCreatedEvent() bool {
-	return w.DetailType == "Object Created"
+// IsObjectCreated checks if the event is an object creation event
+func (e *S3EventBridgeEvent) IsObjectCreated() bool {
+	return e.DetailType == "Object Created"
 }
 
-// IsObjectDeletedEvent checks if the event is an object deletion event
-func (w *S3EventBridgeEvent) IsObjectDeletedEvent() bool {
-	return w.DetailType == "Object Deleted"
+// IsObjectDeleted checks if the event is an object deletion event
+func (e *S3EventBridgeEvent) IsObjectDeleted() bool {
+	return e.DetailType == "Object Deleted"
 }
 
 // IsRestrictedBucket checks if the bucket is a restricted type
-func (w *S3EventBridgeEvent) IsRestrictedBucket() bool {
-	return buckets.IsRestrictedBucket(w.BucketName())
+func (e *S3EventBridgeEvent) IsRestrictedBucket() bool {
+	return buckets.IsRestrictedBucket(e.BucketName())
 }
 
 // UnwrapS3EventBridgeEvents extracts all S3 events from the SQS message
-func (w *SQSEventWrapper) UnwrapS3EventBridgeEvents() ([]S3EventBridgeEvent, []events.SQSBatchItemFailure) {
-	var records []S3EventBridgeEvent
-	var failedRecords []events.SQSBatchItemFailure
+func (w *SQSEventWrapper) UnwrapS3EventBridgeEvents() ([]S3EventBridgeEventWithMessageId, []events.SQSBatchItemFailure) {
+	var parsedEvents []S3EventBridgeEventWithMessageId
+	var failedEvents []events.SQSBatchItemFailure
 
 	for _, record := range w.Event.Records {
 		var event S3EventBridgeEvent
 		if err := json.Unmarshal([]byte(record.Body), &event); err != nil {
 			log.Printf("Failed to parse EventBridge event from SQS message: %v", err)
-			failedRecords = append(failedRecords, events.SQSBatchItemFailure{
+			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: record.MessageId,
 			})
 			continue
 		}
 
-		if event.Source == "aws.s3" {
-			records = append(records, event)
+		if event.Source == "aws.s3" && (event.IsObjectCreated() || event.IsObjectDeleted()) {
+			parsedEvents = append(parsedEvents, S3EventBridgeEventWithMessageId{record.MessageId, event})
 		}
 	}
 
-	return records, failedRecords
+	return parsedEvents, failedEvents
 }

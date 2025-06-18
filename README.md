@@ -60,6 +60,14 @@ AWS_PROFILE=duracloudexp make bucket action=empty bucket=duracloud-pilot-bucket1
 AWS_PROFILE=duracloudexp make bucket action=delete bucket=duracloud-pilot-bucket1
 ```
 
+The `make invoke` task can be used to run _some_ functions locally:
+
+```bash
+make invoke func=FileDeletedFunction event=events/file-deleted/event.json
+```
+
+Results will vary depending on how strongly the function depends on deployed resources.
+
 ## Tests
 
 The stack indicated by `STACK_NAME` must be deployed first.
