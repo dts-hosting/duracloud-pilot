@@ -21,23 +21,35 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		Event: &sqsEvent,
 	}
 
-	records, failedRecords := sqsEventWrapper.UnwrapS3EventBridgeEvents()
+	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
-	for _, record := range records {
-		if !record.IsObjectDeletedEvent() || record.IsRestrictedBucket() {
+	for _, parsedEvent := range parsedEvents {
+		if !parsedEvent.IsObjectDeleted() || parsedEvent.IsRestrictedBucket() {
 			continue
 		}
 
-		bucketName := record.BucketName()
-		objectKey := record.ObjectKey()
+		bucketName := parsedEvent.BucketName()
+		objectKey := parsedEvent.ObjectKey()
 		log.Printf("Processing event for bucket name: %s, object key: %s", bucketName, objectKey)
+
+		if err := processDeletedObject(ctx, bucketName, objectKey); err != nil {
+			log.Printf("Failed to process deleted object %s/%s: %v", bucketName, objectKey, err)
+			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
+				ItemIdentifier: parsedEvent.MessageId,
+			})
+		}
 	}
 
 	return events.SQSEventResponse{
-		BatchItemFailures: failedRecords,
+		BatchItemFailures: failedEvents,
 	}, nil
 }
 
 func main() {
 	lambda.Start(handler)
+}
+
+func processDeletedObject(ctx context.Context, bucketName string, objectKey string) error {
+	// TODO: use db.DeleteItem to make delete call to DDB
+	return nil
 }
