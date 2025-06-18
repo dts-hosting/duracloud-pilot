@@ -1,6 +1,6 @@
 #!/bin/bash
 
-STACK={1:-duracloud-lyrasis}
+STACK=${1:-duracloud-lyrasis}
 
 make bucket action=empty bucket=${STACK}-bucket-requested > /dev/null
 make bucket action=empty bucket=${STACK}-logs > /dev/null

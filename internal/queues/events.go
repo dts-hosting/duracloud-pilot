@@ -1,6 +1,7 @@
-package helpers
+package queues
 
 import (
+	"duracloud/internal/buckets"
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/events"
 	"log"
@@ -47,7 +48,7 @@ func (w *S3EventBridgeEvent) IsObjectDeletedEvent() bool {
 
 // IsRestrictedBucket checks if the bucket is a restricted type
 func (w *S3EventBridgeEvent) IsRestrictedBucket() bool {
-	return IsRestrictedBucket(w.BucketName())
+	return buckets.IsRestrictedBucket(w.BucketName())
 }
 
 // UnwrapS3EventBridgeEvents extracts all S3 events from the SQS message
