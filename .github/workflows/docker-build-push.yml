@@ -25,6 +25,7 @@ jobs:
       matrix:
         function:
           - bucket-requested
+          - file-deleted
 
     steps:
       - name: Checkout code

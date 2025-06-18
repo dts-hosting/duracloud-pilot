@@ -18,6 +18,10 @@ bucket: ## Run a bucket manager script command
 build: ## Build the project (images, artifacts, etc.)
 	@sam build --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH) && sam validate
 
+.PHONY: cleanup
+cleanup: ## Cleanup bucket resources for a stack
+	@./scripts/cleanup-stack.sh $(stack)
+
 .PHONY: creds
 creds: ## Output the test user access key and secret
 	@aws ssm get-parameter --name "/$(stack)/iam/test/access-key-id"
@@ -63,10 +67,9 @@ pull: ## Pull required docker images
 	@docker pull public.ecr.aws/lambda/provided:al2023
 
 .PHONY: test
-test: ## Run all tests
+test: ## Run all tests and cleanup resources
 	@STACK_NAME=$(stack) go test -v ./...
-	@./scripts/bucket-manager.sh empty $(stack)-bucket-requested > /dev/null
-	@./scripts/bucket-manager.sh empty $(stack)-managed > /dev/null
+	$(MAKE) cleanup stack=$(stack)
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
