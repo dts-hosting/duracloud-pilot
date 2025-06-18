@@ -1,9 +1,10 @@
-package helpers
+package buckets
 
 import (
 	"bufio"
 	"bytes"
 	"context"
+	"duracloud/internal/accounts"
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -30,12 +31,20 @@ const (
 	NonCurrentVersionExpirationDays  = 2
 )
 
-type ProcessBucketParams struct {
-	RequestedBucketName string
-	BucketPrefix        string
-	ManagedBucketName   string
-	ReplicationRoleArn  string
-	ResultChan          chan<- map[string]string
+type BucketRequest struct {
+	Name               string
+	Prefix             string
+	ManagedBucketName  string
+	ReplicationRoleArn string
+	ResultChan         chan<- map[string]string
+}
+
+func (b *BucketRequest) FullName() string {
+	return fmt.Sprintf("%s-%s", b.Prefix, b.Name)
+}
+
+func (b *BucketRequest) ReplicationName() string {
+	return fmt.Sprintf("%s%s", b.FullName(), ReplicationSuffix)
 }
 
 func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, stackName string, bucketType string) error {
@@ -174,7 +183,7 @@ func AddStandardLifecycle(ctx context.Context, s3Client *s3.Client, bucketName s
 }
 
 func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
+	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
 	if !ok {
 		return fmt.Errorf("error retrieving aws context")
 	}
@@ -215,7 +224,7 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
 }
 
 func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName string, destBucketName string) error {
-	awsCtx, ok := ctx.Value(AWSContextKey).(AWSContext)
+	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
 	if !ok {
 		return fmt.Errorf("error retrieving aws context")
 	}

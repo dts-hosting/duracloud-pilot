@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"duracloud/internal/helpers"
+	"duracloud/internal/queues"
 	"encoding/json"
 	"log"
 
@@ -17,7 +17,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		return events.SQSEventResponse{}, err
 	}
 
-	sqsEventWrapper := helpers.SQSEventWrapper{
+	sqsEventWrapper := queues.SQSEventWrapper{
 		Event: &sqsEvent,
 	}
 
