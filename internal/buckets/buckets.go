@@ -18,8 +18,9 @@ import (
 )
 
 const (
+	DuraCloudPrefix = "duracloud-"
+
 	BucketRequestedSuffix = "-bucket-requested"
-	DuraCloudPrefix       = "duracloud-"
 	LogsSuffix            = "-logs"
 	ManagedSuffix         = "-managed"
 	PublicSuffix          = "-public"
@@ -29,6 +30,15 @@ const (
 	BucketRequestedFileErrorKey      = "error-processing-bucket-requested-file"
 	LifeCycleTransitionToGlacierDays = 3
 	NonCurrentVersionExpirationDays  = 2
+)
+
+var (
+	ReservedSuffixes = []string{
+		BucketRequestedSuffix,
+		LogsSuffix,
+		ManagedSuffix,
+		ReplicationSuffix,
+	}
 )
 
 type BucketRequest struct {
@@ -380,6 +390,16 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	return buckets, nil
 }
 
+func HasReservedSuffix(name string) bool {
+	for _, suffix := range ReservedSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func IsBucketRequestBucket(name string) bool {
 	return strings.HasSuffix(name, BucketRequestedSuffix)
 }
@@ -447,7 +467,16 @@ func ValidateBucketName(name string) bool {
 		whitelist  = "a-zA-Z0-9-"
 		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
 	)
-	return !disallowed.MatchString(name)
+
+	if disallowed.MatchString(name) {
+		return false
+	}
+
+	if HasReservedSuffix(name) {
+		return false
+	}
+
+	return true
 }
 
 func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, log map[string]string) error {
