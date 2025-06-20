@@ -17,6 +17,7 @@ type ChecksumRecord struct {
 	Object              string `dynamodbav:"Object"`
 	Checksum            string `dynamodbav:"Checksum"`
 	LastChecksumDate    string `dynamodbav:"LastChecksumDate"`
+	LastChecksumMessage string `dynamodbav:"LastChecksumMessage"`
 	LastChecksumSuccess bool   `dynamodbav:"LastChecksumSuccess"`
 	NextChecksumDate    string `dynamodbav:"NextChecksumDate"`
 }
@@ -56,7 +57,7 @@ func GetChecksumRecord(
 	}
 
 	if result.Item == nil {
-		return ChecksumRecord{}, nil
+		return ChecksumRecord{}, fmt.Errorf("checksum record not found")
 	}
 
 	err = attributevalue.UnmarshalMap(result.Item, &checksumRecord)
@@ -106,6 +107,7 @@ func PutChecksumRecord(
 			"Object":              &types.AttributeValueMemberS{Value: record.Object},
 			"Checksum":            &types.AttributeValueMemberS{Value: record.Checksum},
 			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate},
+			"LastChecksumMessage": &types.AttributeValueMemberS{Value: record.LastChecksumMessage},
 			"LastChecksumSuccess": &types.AttributeValueMemberBOOL{Value: record.LastChecksumSuccess},
 		},
 	})

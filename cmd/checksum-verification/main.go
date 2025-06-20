@@ -2,17 +2,20 @@ package main
 
 import (
 	"context"
+	"duracloud/internal/checksum"
 	"duracloud/internal/db"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"log"
 	"os"
 )
 
 var dynamodbClient *dynamodb.Client
+var s3Client *s3.Client
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
@@ -21,6 +24,7 @@ func init() {
 	}
 
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
+	s3Client = s3.NewFromConfig(awsConfig)
 }
 
 func handler(ctx context.Context, event events.DynamoDBEvent) error {
@@ -42,27 +46,32 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 		//currentTime := time.Now()
 		//nextScheduledTime := db.GetNextScheduledTime()
 
-		checkSumRecord := db.ChecksumRecord{
+		checksumRecord := db.ChecksumRecord{
 			Bucket: bucket,
 			Object: object,
 		}
-		checkSumRecord, err = db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, checkSumRecord)
+
+		checksumRecord, err = db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 		if err != nil {
+			// TODO update checksumRecord for failure and PutChecksumRecord (continue)
 			return fmt.Errorf("failed to get checksum record: %w", err)
 		}
 
-		log.Printf("Checksum record: %v", checkSumRecord)
+		obj := checksum.NewS3Object(bucket, object)
+		calc := checksum.NewS3Calculator(s3Client)
+		checksumResult, err := calc.CalculateChecksum(ctx, obj)
+		if err != nil {
+			// TODO update checksumRecord for failure and PutChecksumRecord (continue)
+			return fmt.Errorf("failed to calculate checksum: %w", err)
+		}
 
-		// TODO: implementation ... (discuss error handling)
-		// - Download object from s3
-		// - If object not found delete from checksum table and continue
-		// - Get checksumRecord (see above)
-		// - If not found: create checksumRecord with LastChecksumSuccess (f), PutChecksumRecord
-		// - Schedule next check now in case of transitory errors
-		// - Calculate checksum of object
-		// - Compare with checkSumRecord.Checksum
-		// - If ok: update LastChecksumDate, PutChecksumRecord
-		// - Not ok: update LastChecksumDate & LastChecksumSuccess (f), PutChecksumRecord
+		log.Printf("Calculated checksum: %s", checksumResult)
+		log.Printf("Checksum record: %v", checksumRecord)
+
+		// TODO: continue implementation ...
+		// - Compare with checksumResult with checkSumRecord.Checksum
+		// - Not ok: update LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
+		// - ok: update LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
 	}
 
 	return nil
