@@ -64,6 +64,7 @@ The `make invoke` task can be used to run _some_ functions locally:
 
 ```bash
 make invoke func=FileDeletedFunction event=events/file-deleted/event.json
+make invoke func=ChecksumVerificationFunction event=events/checksum-verification/event.json
 ```
 
 Results will vary depending on how strongly the function depends on deployed resources.

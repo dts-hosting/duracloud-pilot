@@ -100,6 +100,49 @@ Resources:
                   "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 300
 
+  ChecksumVerificationFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: checksum-verification
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-checksum-verification"
+    Properties:
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that processes checksum verification via TTL events
+      Environment:
+        Variables:
+          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+      MemorySize: 512
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !GetAtt DynamoDBChecksumTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:DescribeStream
+                - dynamodb:GetRecords
+                - dynamodb:GetShardIterator
+                - dynamodb:ListStreams
+              Resource:
+                - !GetAtt DynamoDBChecksumSchedulerTable.StreamArn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: "arn:aws:s3:::*"
+      Timeout: 900
+
   FileDeletedFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -145,11 +188,59 @@ Resources:
       Timeout: 60
 
   ##### Function resources (TODO: docs for each resource)
+  CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-verification-concurrency"
+      AlarmDescription: "High concurrency processing checksum verifications"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChecksumVerificationFunction
+      EvaluationPeriods: 2
+      MetricName: ConcurrentExecutions
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Maximum
+      Threshold: 800 # Alert before hitting 1000 limit
+
+  CloudWatchChecksumVerificationFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-verification-errors"
+      AlarmDescription: "Error processing checksum verification"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChecksumVerificationFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+
+  CloudWatchFileDeletedFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-file-deleted-errors"
+      AlarmDescription: "Error processing file deleted event"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FileDeletedFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+
   CloudWatchSQSObjectDeletedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AWS::StackName}-object-deleted-dlq-messages"
-      AlarmDescription: "Messages in object deleted DLQ"
+      AlarmName: !Sub "${AWS::StackName}-file-deleted-dlq-messages"
+      AlarmDescription: "Messages present in file deleted DLQ"
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: QueueName
@@ -171,24 +262,34 @@ Resources:
           AttributeType: S
         - AttributeName: Object
           AttributeType: S
-        - AttributeName: ChecksumPurpose
+      KeySchema:
+        - AttributeName: Bucket
+          KeyType: HASH
+        - AttributeName: Object
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  DynamoDBChecksumSchedulerTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-checksum-scheduler-table"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: Bucket
           AttributeType: S
-        - AttributeName: LastChecksumDate
+        - AttributeName: Object
           AttributeType: S
       KeySchema:
         - AttributeName: Bucket
           KeyType: HASH
         - AttributeName: Object
           KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: ChecksumDateIndex
-          KeySchema:
-            - AttributeName: ChecksumPurpose
-              KeyType: HASH
-            - AttributeName: LastChecksumDate
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: OLD_IMAGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
@@ -307,24 +408,17 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
 
-  LambdaBucketRequestInvokePermission:
-    Type: AWS::Lambda::Permission
+  LambdaDynamoDBChecksumSchedulerSource:
+    Type: AWS::Lambda::EventSourceMapping
     Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt BucketRequestedFunction.Arn
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
-
-  #  LambdaSQSFixityCheckerSource:
-  #    Type: AWS::Lambda::EventSourceMapping
-  #    Properties:
-  #      BatchSize: 10
-  #      EventSourceArn: !GetAtt SQSFixityChecker.Arn
-  #      FunctionName: !Ref FixityCheckerFunction
-  #      FunctionResponseTypes:
-  #        - ReportBatchItemFailures
-  #      MaximumBatchingWindowInSeconds: 5
+      BatchSize: 10
+      EventSourceArn: !GetAtt DynamoDBChecksumSchedulerTable.StreamArn
+      FunctionName: !Ref ChecksumVerificationFunction
+      FilterCriteria:
+        Filters:
+          - Pattern: '{"eventName": ["REMOVE"]}'
+      MaximumBatchingWindowInSeconds: 5
+      StartingPosition: TRIM_HORIZON
 
   #  LambdaSQSObjectCreatedSource:
   #    Type: AWS::Lambda::EventSourceMapping
@@ -346,6 +440,15 @@ Resources:
         - ReportBatchItemFailures
       MaximumBatchingWindowInSeconds: 5
 
+  LambdaBucketRequestInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt BucketRequestedFunction.Arn
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
+
   LogsBucketRequestedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -356,6 +459,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${FileDeletedFunction}"
+      RetentionInDays: 7
+
+  LogsChecksumVerificationFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ChecksumVerificationFunction}"
       RetentionInDays: 7
 
   S3BucketRequestedBucket:
@@ -419,11 +528,6 @@ Resources:
                 "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
-
-  SQSFixityChecker:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub "${AWS::StackName}-fixity-checker"
 
   SQSObjectCreated:
     Type: AWS::SQS::Queue

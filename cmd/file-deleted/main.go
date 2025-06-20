@@ -4,17 +4,16 @@ import (
 	"context"
 	"duracloud/internal/queues"
 	"encoding/json"
-	"log"
-
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"log"
 )
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
 	var sqsEvent events.SQSEvent
 	if err := json.Unmarshal(event, &sqsEvent); err != nil {
-		log.Printf("Failed to parse SQS event: %v", err)
-		return events.SQSEventResponse{}, err
+		return events.SQSEventResponse{}, fmt.Errorf("failed to parse SQS event: %v", err)
 	}
 
 	sqsEventWrapper := queues.SQSEventWrapper{
@@ -50,6 +49,6 @@ func main() {
 }
 
 func processDeletedObject(ctx context.Context, bucketName string, objectKey string) error {
-	// TODO: use db.DeleteItem to make delete call to DDB
+	// TODO: use db.DeleteItem to make delete calls to checksum and scheduler tables
 	return nil
 }
