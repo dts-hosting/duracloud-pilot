@@ -1,0 +1,44 @@
+{
+  "Records": [
+    {
+      "eventID": "c4ca4238a0b923820dcc509a6f75849b",
+      "eventName": "REMOVE",
+      "eventVersion": "1.1",
+      "eventSource": "aws:dynamodb",
+      "awsRegion": "us-east-1",
+      "eventSourceARN": "arn:aws:dynamodb:us-east-1:123456789012:table/my-stack-checksum-scheduler-table/stream/2023-12-01T00:00:00.000",
+      "userIdentity": {
+        "type": "Service",
+        "principalId": "dynamodb.amazonaws.com"
+      },
+      "dynamodb": {
+        "ApproximateCreationDateTime": 1701388800,
+        "Keys": {
+          "Bucket": {
+            "S": "my-stack-data-bucket"
+          },
+          "Object": {
+            "S": "documents/file.pdf"
+          }
+        },
+        "OldImage": {
+          "Bucket": {
+            "S": "my-stack-data-bucket"
+          },
+          "Object": {
+            "S": "documents/file.pdf"
+          },
+          "NextChecksumDate": {
+            "S": "2024-05-15T14:30:00Z"
+          },
+          "TTL": {
+            "N": "1715781000"
+          }
+        },
+        "SequenceNumber": "700000000000000000000001",
+        "SizeBytes": 59,
+        "StreamViewType": "OLD_AND_NEW_IMAGES"
+      }
+    }
+  ]
+}

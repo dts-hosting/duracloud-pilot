@@ -44,7 +44,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
 	bucketLimit, _ := buckets.GetBucketRequestLimit(os.Getenv("S3_MAX_BUCKETS_PER_REQUEST"))
 	bucketsStatus := make(map[string]string)
-	managedBucketName := fmt.Sprintf("%s%s", bucketPrefix, buckets.ManagedSuffix)
+	managedBucketName := os.Getenv("S3_MANAGED_BUCKET\n")
 	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
 
 	var s3Event events.S3Event

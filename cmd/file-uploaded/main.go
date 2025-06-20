@@ -12,11 +12,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"log"
 	"time"
 )
 
 var dynamodbClient *dynamodb.Client
+var s3Client *s3.Client
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
@@ -30,6 +32,7 @@ func init() {
 	}
 
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
+	s3Client = s3.NewFromConfig(awsConfig)
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
@@ -45,18 +48,18 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
 	for _, parsedEvent := range parsedEvents {
-		if !parsedEvent.IsObjectDeleted() || parsedEvent.IsRestrictedBucket() {
+		if !parsedEvent.IsObjectCreated() || parsedEvent.IsRestrictedBucket() {
 			continue
 		}
 
 		bucketName := parsedEvent.BucketName()
 		objectKey := parsedEvent.ObjectKey()
 		obj := checksum.NewS3Object(bucketName, objectKey)
-		log.Printf("Processing delete event for bucket name: %s, object key: %s", bucketName, objectKey)
+		log.Printf("Processing upload event for bucket name: %s, object key: %s", bucketName, objectKey)
 
-		if err := processDeletedObject(ctx, dynamodbClient, obj); err != nil {
+		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
 			// only use for retryable errors
-			log.Printf("Failed to process deleted object %s/%s: %v", bucketName, objectKey, err)
+			log.Printf("Failed to process uploaded object %s/%s: %v", bucketName, objectKey, err)
 			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: parsedEvent.MessageId,
 			})
@@ -72,9 +75,16 @@ func main() {
 	lambda.Start(handler)
 }
 
-func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
+func processUploadedObject(
+	ctx context.Context,
+	s3Client *s3.Client,
+	dynamodbClient *dynamodb.Client,
+	obj checksum.S3Object,
+) error {
 	// TODO: continue implementation ...
-	// - use db.DeleteItem to make delete calls to checksum and scheduler tables
+	// - Calc checksum
+	// - Not ok: LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
+	// - ok: LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil

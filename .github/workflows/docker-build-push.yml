@@ -25,7 +25,9 @@ jobs:
       matrix:
         function:
           - bucket-requested
+          - checksum-verification
           - file-deleted
+          - file-uploaded
 
     steps:
       - name: Checkout code

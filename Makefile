@@ -29,7 +29,7 @@ creds: ## Output the test user access key and secret
 
 .PHONY: delete
 delete: ## Delete a deployed stack
-	@sam delete --stack-name $(stack)
+	@sam delete --stack-name $(stack) --no-prompts
 
 .PHONY: deploy
 deploy: build ## Deploy stack to AWS

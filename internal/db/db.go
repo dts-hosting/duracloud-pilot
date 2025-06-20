@@ -2,120 +2,133 @@ package db
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"time"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"math/big"
+	"time"
 )
 
 type ChecksumRecord struct {
-	ObjectId            string `dynamodbav:"ObjectId"`
-	ChecksumPurpose     string `dynamodbav:"ChecksumPurpose"`
-	LastChecksumDate    string `dynamodbav:"LastChecksumDate"`
-	LastChecksumSuccess bool   `dynamodbav:"LastChecksumSuccess"`
+	Bucket              string `dynamodbav:"Bucket"`
+	Object              string `dynamodbav:"Object"`
 	Checksum            string `dynamodbav:"Checksum"`
+	LastChecksumDate    string `dynamodbav:"LastChecksumDate"`
+	LastChecksumMessage string `dynamodbav:"LastChecksumMessage"`
+	LastChecksumSuccess bool   `dynamodbav:"LastChecksumSuccess"`
+	NextChecksumDate    string `dynamodbav:"NextChecksumDate"`
 }
 
-// GetRecordsNeedingVerification retrieve records where last checksum date is older than 6 months
-func GetRecordsNeedingVerification(ctx context.Context, client *dynamodb.Client, tableName string, batchSize int) ([]ChecksumRecord, map[string]types.AttributeValue, error) {
-	cutoffDate := time.Now().AddDate(0, -6, 0).Format(time.RFC3339)
-
-	queryInput := &dynamodb.QueryInput{
-		TableName:              aws.String(tableName),
-		IndexName:              aws.String("ChecksumDateIndex"),
-		KeyConditionExpression: aws.String("ChecksumPurpose = :purpose AND LastChecksumDate < :cutoffDate"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":purpose":    &types.AttributeValueMemberS{Value: "VERIFICATION"},
-			":cutoffDate": &types.AttributeValueMemberS{Value: cutoffDate},
-		},
-		Limit: aws.Int32(int32(batchSize)),
-	}
-
-	resp, err := client.Query(ctx, queryInput)
-	if err != nil {
-		return nil, nil, fmt.Errorf("query failed: %v", err)
-	}
-
-	if len(resp.Items) == 0 {
-		return []ChecksumRecord{}, nil, nil
-	}
-
-	var records []ChecksumRecord
-	err = attributevalue.UnmarshalListOfMaps(resp.Items, &records)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unmarshal failed: %v", err)
-	}
-
-	return records, resp.LastEvaluatedKey, nil
-}
-
-// ProcessChecksumVerifications passes records to a processor function
-// The processor function is called for each record that needs verification
-// which can then be processed inline or handed-off to a queue etc.
-func ProcessChecksumVerifications(
+func DeleteChecksumRecord(
 	ctx context.Context,
-	dynamoClient *dynamodb.Client,
-	tableName string,
-	batchSize int,
-	processor func(ctx context.Context, record ChecksumRecord) error,
+	client *dynamodb.Client,
+	table string,
+	record ChecksumRecord,
 ) error {
-	var lastEvaluatedKey map[string]types.AttributeValue
-	processedCount := 0
-	errorCount := 0
-
-	for {
-		records, nextKey, err := GetRecordsNeedingVerification(ctx, dynamoClient, tableName, batchSize)
-		if err != nil {
-			return fmt.Errorf("failed to get records: %v", err)
-		}
-
-		if len(records) == 0 {
-			break
-		}
-
-		for _, record := range records {
-			if err := processor(ctx, record); err != nil {
-				fmt.Printf("Error processing record %s: %v\n", record.ObjectId, err)
-				errorCount++
-			}
-			processedCount++
-		}
-
-		fmt.Printf("Processed %d records so far (%d errors)\n", processedCount, errorCount)
-
-		lastEvaluatedKey = nextKey
-		if lastEvaluatedKey == nil {
-			break // No more records to process
-		}
-	}
-
-	fmt.Printf("Completed processing. Processed %d records with %d errors.\n",
-		processedCount, errorCount)
-	return nil
-}
-
-func UpdateChecksumVerification(ctx context.Context, client *dynamodb.Client, tableName string,
-	objectId string, checksumSuccess bool) error {
-	now := time.Now().Format(time.RFC3339)
-
-	_, err := client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: aws.String(tableName),
+	_, err := client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(table),
 		Key: map[string]types.AttributeValue{
-			"ObjectId": &types.AttributeValueMemberS{Value: objectId},
-		},
-		UpdateExpression: aws.String("SET LastChecksumDate = :date, LastChecksumSuccess = :success"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":date":    &types.AttributeValueMemberS{Value: now},
-			":success": &types.AttributeValueMemberBOOL{Value: checksumSuccess},
+			"Bucket": &types.AttributeValueMemberS{Value: record.Bucket},
+			"Object": &types.AttributeValueMemberS{Value: record.Object},
 		},
 	})
+	return err
+}
 
+func GetChecksumRecord(
+	ctx context.Context,
+	client *dynamodb.Client,
+	checksumTable string,
+	record ChecksumRecord,
+) (ChecksumRecord, error) {
+	checksumRecord := ChecksumRecord{}
+	result, err := client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(checksumTable),
+		Key: map[string]types.AttributeValue{
+			"Bucket": &types.AttributeValueMemberS{Value: record.Bucket},
+			"Object": &types.AttributeValueMemberS{Value: record.Object},
+		},
+	})
 	if err != nil {
-		return fmt.Errorf("failed to update verification: %v", err)
+		return checksumRecord, err
 	}
 
-	return nil
+	if result.Item == nil {
+		return ChecksumRecord{}, fmt.Errorf("checksum record not found")
+	}
+
+	err = attributevalue.UnmarshalMap(result.Item, &checksumRecord)
+	if err != nil {
+		return ChecksumRecord{}, fmt.Errorf("failed to unmarshal checksum record: %v", err)
+	}
+
+	return checksumRecord, nil
+}
+
+func GetNextScheduledTime() (time.Time, error) {
+	baseTime := time.Now().AddDate(0, 5, 14)
+
+	jitterDays, err := rand.Int(rand.Reader, big.NewInt(30))
+	if err != nil {
+		return baseTime, fmt.Errorf("failed to generate day jitter: %v", err)
+	}
+
+	jitterHours, err := rand.Int(rand.Reader, big.NewInt(24))
+	if err != nil {
+		return baseTime, fmt.Errorf("failed to generate hour jitter: %v", err)
+	}
+
+	jitterMinutes, err := rand.Int(rand.Reader, big.NewInt(60))
+	if err != nil {
+		return baseTime, fmt.Errorf("failed to generate minute jitter: %v", err)
+	}
+
+	scheduledTime := baseTime.
+		AddDate(0, 0, int(jitterDays.Int64())).
+		Add(time.Duration(jitterHours.Int64()) * time.Hour).
+		Add(time.Duration(jitterMinutes.Int64()) * time.Minute)
+
+	return scheduledTime, nil
+}
+
+func PutChecksumRecord(
+	ctx context.Context,
+	client *dynamodb.Client,
+	checksumTable string,
+	record ChecksumRecord,
+) error {
+	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(checksumTable),
+		Item: map[string]types.AttributeValue{
+			"Bucket":              &types.AttributeValueMemberS{Value: record.Bucket},
+			"Object":              &types.AttributeValueMemberS{Value: record.Object},
+			"Checksum":            &types.AttributeValueMemberS{Value: record.Checksum},
+			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate},
+			"LastChecksumMessage": &types.AttributeValueMemberS{Value: record.LastChecksumMessage},
+			"LastChecksumSuccess": &types.AttributeValueMemberBOOL{Value: record.LastChecksumSuccess},
+		},
+	})
+	return err
+}
+
+func ScheduleNextVerification(
+	ctx context.Context,
+	client *dynamodb.Client,
+	schedulerTable string,
+	record ChecksumRecord,
+	scheduledTime time.Time,
+) error {
+	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(schedulerTable),
+		Item: map[string]types.AttributeValue{
+			"Bucket":           &types.AttributeValueMemberS{Value: record.Bucket},
+			"Object":           &types.AttributeValueMemberS{Value: record.Object},
+			"NextChecksumDate": &types.AttributeValueMemberS{Value: scheduledTime.Format(time.RFC3339)},
+			"TTL":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", scheduledTime.Unix())},
+		},
+	})
+	return err
 }
