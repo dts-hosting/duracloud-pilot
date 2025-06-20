@@ -1,0 +1,66 @@
+{
+  "Records": [
+    {
+      "eventID": "c4ca4238a0b923820dcc509a6f75849b",
+      "eventName": "MODIFY",
+      "eventVersion": "1.1",
+      "eventSource": "aws:dynamodb",
+      "awsRegion": "us-east-1",
+      "dynamodb": {
+        "ApproximateCreationDateTime": 1703097600,
+        "Keys": {
+          "Bucket": {
+            "S": "my-stack-user-bucket"
+          },
+          "Object": {
+            "S": "documents/important-file.pdf"
+          }
+        },
+        "OldImage": {
+          "Bucket": {
+            "S": "my-stack-user-bucket"
+          },
+          "Object": {
+            "S": "documents/important-file.pdf"
+          },
+          "Checksum": {
+            "S": "d41d8cd98f00b204e9800998ecf8427e"
+          },
+          "LastChecksumDate": {
+            "S": "2024-12-20T15:30:00Z"
+          },
+          "LastChecksumMessage": {
+            "S": "ok"
+          },
+          "LastChecksumSuccess": {
+            "BOOL": true
+          }
+        },
+        "NewImage": {
+          "Bucket": {
+            "S": "my-stack-user-bucket"
+          },
+          "Object": {
+            "S": "documents/important-file.pdf"
+          },
+          "Checksum": {
+            "S": "d41d8cd98f00b204e9800998ecf8427e"
+          },
+          "LastChecksumDate": {
+            "S": "2024-12-20T16:45:00Z"
+          },
+          "LastChecksumMessage": {
+            "S": "checksum mismatch: expected d41d8cd98f00b204e9800998ecf8427e, got a1b2c3d4e5f6789..."
+          },
+          "LastChecksumSuccess": {
+            "BOOL": false
+          }
+        },
+        "SequenceNumber": "111",
+        "SizeBytes": 312,
+        "StreamViewType": "NEW_AND_OLD_IMAGES"
+      },
+      "eventSourceARN": "arn:aws:dynamodb:us-east-1:123456789012:table/my-stack-checksum-table/stream/2024-12-20T10:00:00.000"
+    }
+  ]
+}

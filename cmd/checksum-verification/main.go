@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -18,7 +20,12 @@ var dynamodbClient *dynamodb.Client
 var s3Client *s3.Client
 
 func init() {
-	awsConfig, err := config.LoadDefaultConfig(context.Background())
+	awsConfig, err := config.LoadDefaultConfig(context.Background(),
+		config.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxAttempts(
+				retry.NewStandard(), 10)
+		}),
+	)
 	if err != nil {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}

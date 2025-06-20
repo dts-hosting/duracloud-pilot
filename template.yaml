@@ -14,6 +14,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for Bucket Requested function (leave empty for local build)"
+  ChecksumFailureImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for Checksum Failure function (leave empty for local build)"
   ChecksumVerificationImageUri:
     Type: String
     Default: ""
@@ -36,6 +40,8 @@ Parameters:
 Conditions:
   BucketRequestedUseExternalImage:
     !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
+  ChecksumFailureUseExternalImage:
+    !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
     !Not [!Equals [!Ref ChecksumVerificationImageUri, ""]]
   FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
@@ -59,6 +65,7 @@ Resources:
         Variables:
           S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
           S3_INVENTORY_DEST_BUCKET: !Ref S3ManagedBucket
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
           S3_MAX_BUCKETS_PER_REQUEST: 5
           S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
       ImageUri:
@@ -111,7 +118,47 @@ Resources:
               Condition:
                 StringEquals:
                   "iam:PassedToService": "s3.amazonaws.com"
-      Timeout: 300
+      Timeout: 60
+
+  ChecksumFailureFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: checksum-failure
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-checksum-failure"
+    Properties:
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that processes checksum failure events
+      Environment:
+        Variables:
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+      ImageUri:
+        !If [
+          ChecksumFailureUseExternalImage,
+          !Ref ChecksumFailureImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      MemorySize: 128
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed/*"
+            - Effect: Allow
+              Action:
+                - dynamodb:DescribeStream
+                - dynamodb:GetRecords
+                - dynamodb:GetShardIterator
+                - dynamodb:ListStreams
+              Resource:
+                - !GetAtt DynamoDBChecksumTable.StreamArn
+      Timeout: 60
 
   ChecksumVerificationFunction:
     Type: AWS::Serverless::Function
@@ -142,6 +189,10 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - s3:GetObject
+              Resource: "arn:aws:s3:::*"
+            - Effect: Allow
+              Action:
                 - dynamodb:GetItem
                 - dynamodb:PutItem
                 - dynamodb:Query
@@ -156,10 +207,6 @@ Resources:
                 - dynamodb:ListStreams
               Resource:
                 - !GetAtt DynamoDBChecksumSchedulerTable.StreamArn
-            - Effect: Allow
-              Action:
-                - s3:GetObject
-              Resource: "arn:aws:s3:::*"
       Timeout: 900
 
   FileDeletedFunction:
@@ -241,6 +288,10 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - s3:GetObject
+              Resource: "arn:aws:s3:::*"
+            - Effect: Allow
+              Action:
                 - dynamodb:PutItem
               Resource:
                 - !GetAtt DynamoDBChecksumTable.Arn
@@ -276,6 +327,40 @@ Resources:
       Period: 300
       Statistic: Maximum
       Threshold: 800 # Alert before hitting 1000 limit
+
+  CloudWatchDynamoDBChecksumTableWriteCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-table-high-write-capacity"
+      AlarmDescription: "DynamoDB Checksum table consuming high write capacity"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBChecksumTable
+      EvaluationPeriods: 3
+      MetricName: ConsumedWriteCapacityUnits
+      Namespace: AWS/DynamoDB
+      Period: 300
+      Statistic: Sum
+      Threshold: 50000 # Alert if >50K WCU in 5 minutes
+      TreatMissingData: notBreaching
+
+  CloudWatchDynamoDBSchedulerTableWriteCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-scheduler-table-high-write-capacity"
+      AlarmDescription: "DynamoDB Scheduler table consuming high write capacity"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBChecksumSchedulerTable
+      EvaluationPeriods: 3
+      MetricName: ConsumedWriteCapacityUnits
+      Namespace: AWS/DynamoDB
+      Period: 300
+      Statistic: Sum
+      Threshold: 50000 # Alert if >50K WCU in 5 minutes
+      TreatMissingData: notBreaching
 
   CloudWatchSQSObjectCreatedAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -324,6 +409,8 @@ Resources:
           KeyType: HASH
         - AttributeName: Object
           KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
@@ -474,6 +561,28 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
 
+  LambdaDynamoDBChecksumFailureSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      EventSourceArn: !GetAtt DynamoDBChecksumTable.StreamArn
+      FunctionName: !Ref ChecksumFailureFunction
+      FilterCriteria:
+        Filters:
+          - Pattern: |
+              {
+                "eventName": ["INSERT", "MODIFY"],
+                "dynamodb": {
+                  "NewImage": {
+                    "LastChecksumSuccess": {
+                      "BOOL": [false]
+                    }
+                  }
+                }
+              }
+      MaximumBatchingWindowInSeconds: 5
+      StartingPosition: TRIM_HORIZON
+
   LambdaDynamoDBChecksumSchedulerSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -510,6 +619,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${BucketRequestedFunction}"
+      RetentionInDays: 7
+
+  LogsChecksumFailureFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ChecksumFailureFunction}"
       RetentionInDays: 7
 
   LogsChecksumVerificationFunction:
@@ -601,7 +716,7 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt SQSObjectCreatedDLQ.Arn
         maxReceiveCount: 3
-      VisibilityTimeout: 900
+      VisibilityTimeout: 960
 
   SQSObjectDeleted:
     Type: AWS::SQS::Queue

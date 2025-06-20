@@ -103,7 +103,12 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj S3Object) (str
 		}
 		return "", fmt.Errorf("failed to get object content for %s: %w", obj.URI(), err)
 	}
-	defer getResp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Printf("Failed to close body for %s: %v", obj.URI(), err)
+		}
+	}(getResp.Body)
 
 	return c.streamAndHash(getResp.Body, obj.URI(), fileSize)
 }
