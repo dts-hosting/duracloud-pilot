@@ -63,6 +63,7 @@ AWS_PROFILE=duracloudexp make bucket action=delete bucket=duracloud-pilot-bucket
 The `make invoke` task can be used to run _some_ functions locally:
 
 ```bash
+make invoke func=FileUploadedFunction event=events/file-uploaded/event.json
 make invoke func=FileDeletedFunction event=events/file-deleted/event.json
 make invoke func=ChecksumVerificationFunction event=events/checksum-verification/event.json
 ```

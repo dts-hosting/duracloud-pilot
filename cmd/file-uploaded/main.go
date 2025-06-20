@@ -23,17 +23,17 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
 	for _, parsedEvent := range parsedEvents {
-		if !parsedEvent.IsObjectDeleted() || parsedEvent.IsRestrictedBucket() {
+		if !parsedEvent.IsObjectCreated() || parsedEvent.IsRestrictedBucket() {
 			continue
 		}
 
 		bucketName := parsedEvent.BucketName()
 		objectKey := parsedEvent.ObjectKey()
-		log.Printf("Processing delete event for bucket name: %s, object key: %s", bucketName, objectKey)
+		log.Printf("Processing upload event for bucket name: %s, object key: %s", bucketName, objectKey)
 
-		if err := processDeletedObject(ctx, bucketName, objectKey); err != nil {
+		if err := processUploadedObject(ctx, bucketName, objectKey); err != nil {
 			// only use for retryable errors
-			log.Printf("Failed to process deleted object %s/%s: %v", bucketName, objectKey, err)
+			log.Printf("Failed to process uploaded object %s/%s: %v", bucketName, objectKey, err)
 			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: parsedEvent.MessageId,
 			})
@@ -49,8 +49,10 @@ func main() {
 	lambda.Start(handler)
 }
 
-func processDeletedObject(ctx context.Context, bucketName string, objectKey string) error {
+func processUploadedObject(ctx context.Context, bucketName string, objectKey string) error {
 	// TODO: continue implementation ...
-	// - use db.DeleteItem to make delete calls to checksum and scheduler tables
+	// - Calc checksum
+	// - Not ok: LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
+	// - ok: LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
 	return nil
 }

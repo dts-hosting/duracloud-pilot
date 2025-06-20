@@ -13,15 +13,19 @@ Parameters:
   BucketRequestedImageUri:
     Type: String
     Default: ""
-    Description: "Docker image URI for Bucket Requested function (leave empty for local build)"
+    Description: "Docker image for Bucket Requested function (leave empty for local build)"
   ChecksumVerificationImageUri:
     Type: String
     Default: ""
-    Description: "Docker image URI for Checksum Verification function (leave empty for local build)"
+    Description: "Docker image for Checksum Verification function (leave empty for local build)"
   FileDeletedImageUri:
     Type: String
     Default: ""
-    Description: "Docker image URI for File Deleted function (leave empty for local build)"
+    Description: "Docker image for File Deleted function (leave empty for local build)"
+  FileUploadedImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for File Uploaded function (leave empty for local build)"
   LambdaArchitecture:
     Type: String
     AllowedValues:
@@ -35,6 +39,7 @@ Conditions:
   ChecksumVerificationUseExternalImage:
     !Not [!Equals [!Ref ChecksumVerificationImageUri, ""]]
   FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
+  FileUploadedUseExternalImage: !Not [!Equals [!Ref FileUploadedImageUri, ""]]
 
 Resources:
   ##### Functions
@@ -130,7 +135,7 @@ Resources:
           !Ref ChecksumVerificationImageUri,
           !Ref "AWS::NoValue",
         ]
-      MemorySize: 512
+      MemorySize: 256
       PackageType: Image
       Policies:
         - AWSLambdaBasicExecutionRole
@@ -172,6 +177,7 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
           S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
@@ -189,7 +195,7 @@ Resources:
                 - dynamodb:DeleteItem
               Resource:
                 - !GetAtt DynamoDBChecksumTable.Arn
-                - !Sub "${DynamoDBChecksumTable.Arn}/index/*"
+                - !GetAtt DynamoDBChecksumSchedulerTable.Arn
             - Effect: Allow
               Action:
                 - sqs:ReceiveMessage
@@ -204,6 +210,55 @@ Resources:
                 StringEquals:
                   "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 60
+
+  FileUploadedFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: file-uploaded
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-file-uploaded"
+    Properties:
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that processes s3 object uploaded events
+      Environment:
+        Variables:
+          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
+      ImageUri:
+        !If [
+          FileUploadedUseExternalImage,
+          !Ref FileUploadedImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      MemorySize: 256
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource:
+                - !GetAtt DynamoDBChecksumTable.Arn
+                - !GetAtt DynamoDBChecksumSchedulerTable.Arn
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource: !GetAtt SQSObjectCreated.Arn
+            - Effect: Allow
+              Action:
+                - iam:PassRole
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  "iam:PassedToService": "s3.amazonaws.com"
+      Timeout: 900
 
   ##### Function resources (TODO: docs for each resource)
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
@@ -222,42 +277,26 @@ Resources:
       Statistic: Maximum
       Threshold: 800 # Alert before hitting 1000 limit
 
-  CloudWatchChecksumVerificationFunctionErrorAlarm:
+  CloudWatchSQSObjectCreatedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AWS::StackName}-checksum-verification-errors"
-      AlarmDescription: "Error processing checksum verification"
-      ComparisonOperator: GreaterThanThreshold
+      AlarmName: !Sub "${AWS::StackName}-object-created-dlq-messages"
+      AlarmDescription: "Messages present in file uploaded DLQ"
+      ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
-        - Name: FunctionName
-          Value: !Ref ChecksumVerificationFunction
+        - Name: QueueName
+          Value: !GetAtt SQSObjectCreatedDLQ.QueueName
       EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
       Period: 300
-      Statistic: Sum
-      Threshold: 1
-
-  CloudWatchFileDeletedFunctionErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${AWS::StackName}-file-deleted-errors"
-      AlarmDescription: "Error processing file deleted event"
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref FileDeletedFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 300
-      Statistic: Sum
+      Statistic: Average
       Threshold: 1
 
   CloudWatchSQSObjectDeletedAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AWS::StackName}-file-deleted-dlq-messages"
+      AlarmName: !Sub "${AWS::StackName}-object-deleted-dlq-messages"
       AlarmDescription: "Messages present in file deleted DLQ"
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
@@ -426,6 +465,15 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
 
+  LambdaBucketRequestInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt BucketRequestedFunction.Arn
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
+
   LambdaDynamoDBChecksumSchedulerSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -438,15 +486,15 @@ Resources:
       MaximumBatchingWindowInSeconds: 5
       StartingPosition: TRIM_HORIZON
 
-  #  LambdaSQSObjectCreatedSource:
-  #    Type: AWS::Lambda::EventSourceMapping
-  #    Properties:
-  #      BatchSize: 10
-  #      EventSourceArn: !GetAtt SQSObjectCreated.Arn
-  #      FunctionName: !Ref FileUploadedFunction
-  #      FunctionResponseTypes:
-  #        - ReportBatchItemFailures
-  #      MaximumBatchingWindowInSeconds: 5
+  LambdaSQSObjectCreatedSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      EventSourceArn: !GetAtt SQSObjectCreated.Arn
+      FunctionName: !Ref FileUploadedFunction
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+      MaximumBatchingWindowInSeconds: 5
 
   LambdaSQSObjectDeletedSource:
     Type: AWS::Lambda::EventSourceMapping
@@ -458,19 +506,16 @@ Resources:
         - ReportBatchItemFailures
       MaximumBatchingWindowInSeconds: 5
 
-  LambdaBucketRequestInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt BucketRequestedFunction.Arn
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
-
   LogsBucketRequestedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${BucketRequestedFunction}"
+      RetentionInDays: 7
+
+  LogsChecksumVerificationFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ChecksumVerificationFunction}"
       RetentionInDays: 7
 
   LogsFileDeletedFunction:
@@ -479,10 +524,10 @@ Resources:
       LogGroupName: !Sub "/aws/lambda/${FileDeletedFunction}"
       RetentionInDays: 7
 
-  LogsChecksumVerificationFunction:
+  LogsFileUploadedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ChecksumVerificationFunction}"
+      LogGroupName: !Sub "/aws/lambda/${FileUploadedFunction}"
       RetentionInDays: 7
 
   S3BucketRequestedBucket:
@@ -551,6 +596,12 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${AWS::StackName}-object-created"
+      MessageRetentionPeriod: 1209600
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SQSObjectCreatedDLQ.Arn
+        maxReceiveCount: 3
+      VisibilityTimeout: 900
 
   SQSObjectDeleted:
     Type: AWS::SQS::Queue
@@ -562,6 +613,12 @@ Resources:
         deadLetterTargetArn: !GetAtt SQSObjectDeletedDLQ.Arn
         maxReceiveCount: 3
       VisibilityTimeout: 300
+
+  SQSObjectCreatedDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-object-created-dlq"
+      MessageRetentionPeriod: 1209600
 
   SQSObjectDeletedDLQ:
     Type: AWS::SQS::Queue
