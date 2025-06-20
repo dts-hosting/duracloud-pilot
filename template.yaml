@@ -14,6 +14,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image URI for Bucket Requested function (leave empty for local build)"
+  ChecksumVerificationImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image URI for Checksum Verification function (leave empty for local build)"
   FileDeletedImageUri:
     Type: String
     Default: ""
@@ -26,7 +30,11 @@ Parameters:
     Description: Architecture for Lambda functions
 
 Conditions:
-  UseExternalImage: !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
+  BucketRequestedUseExternalImage:
+    !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
+  ChecksumVerificationUseExternalImage:
+    !Not [!Equals [!Ref ChecksumVerificationImageUri, ""]]
+  FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
 
 Resources:
   ##### Functions
@@ -50,7 +58,7 @@ Resources:
           S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
       ImageUri:
         !If [
-          UseExternalImage,
+          BucketRequestedUseExternalImage,
           !Ref BucketRequestedImageUri,
           !Ref "AWS::NoValue",
         ]
@@ -116,6 +124,12 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+      ImageUri:
+        !If [
+          ChecksumVerificationUseExternalImage,
+          !Ref ChecksumVerificationImageUri,
+          !Ref "AWS::NoValue",
+        ]
       MemorySize: 512
       PackageType: Image
       Policies:
@@ -160,7 +174,11 @@ Resources:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
-        !If [UseExternalImage, !Ref FileDeletedImageUri, !Ref "AWS::NoValue"]
+        !If [
+          FileDeletedUseExternalImage,
+          !Ref FileDeletedImageUri,
+          !Ref "AWS::NoValue",
+        ]
       MemorySize: 128
       PackageType: Image
       Policies:
