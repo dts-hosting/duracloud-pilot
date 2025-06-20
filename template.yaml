@@ -10,6 +10,10 @@ Globals:
       LogFormat: JSON
 
 Parameters:
+  AlertEmailAddress:
+    Type: String
+    Default: ""
+    Description: "Email address for alarm notifications (leave empty to disable email alerts)"
   BucketRequestedImageUri:
     Type: String
     Default: ""
@@ -44,6 +48,7 @@ Conditions:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
     !Not [!Equals [!Ref ChecksumVerificationImageUri, ""]]
+  EnableEmailNotifications: !Not [!Equals [!Ref AlertEmailAddress, ""]]
   FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
   FileUploadedUseExternalImage: !Not [!Equals [!Ref FileUploadedImageUri, ""]]
 
@@ -327,6 +332,15 @@ Resources:
       Period: 300
       Statistic: Maximum
       Threshold: 800 # Alert before hitting 1000 limit
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+      OKActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchDynamoDBChecksumTableWriteCapacityAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -344,6 +358,15 @@ Resources:
       Statistic: Sum
       Threshold: 50000 # Alert if >50K WCU in 5 minutes
       TreatMissingData: notBreaching
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+      OKActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchDynamoDBSchedulerTableWriteCapacityAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -361,6 +384,15 @@ Resources:
       Statistic: Sum
       Threshold: 50000 # Alert if >50K WCU in 5 minutes
       TreatMissingData: notBreaching
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+      OKActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchSQSObjectCreatedAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -377,6 +409,11 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: 1
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchSQSObjectDeletedAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -393,6 +430,11 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: 1
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   DynamoDBChecksumTable:
     Type: AWS::DynamoDB::Table
@@ -706,6 +748,20 @@ Resources:
                 "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
+
+  SNSEmailAlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: EnableEmailNotifications
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-email-alarm-notifications"
+
+  SNSEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: EnableEmailNotifications
+    Properties:
+      Protocol: email
+      TopicArn: !Ref SNSEmailAlarmTopic
+      Endpoint: !Ref AlertEmailAddress
 
   SQSObjectCreated:
     Type: AWS::SQS::Queue
