@@ -39,6 +39,7 @@ Parameters:
     AllowedValues:
       - arm64
       - x86_64
+    Default: x86_64
     Description: Architecture for Lambda functions
 
 Conditions:
@@ -119,7 +120,7 @@ Resources:
             - Effect: Allow
               Action:
                 - iam:PassRole
-              Resource: "*"
+              Resource: !GetAtt IAMS3ReplicationRole.Arn
               Condition:
                 StringEquals:
                   "iam:PassedToService": "s3.amazonaws.com"
@@ -254,13 +255,6 @@ Resources:
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
               Resource: !GetAtt SQSObjectDeleted.Arn
-            - Effect: Allow
-              Action:
-                - iam:PassRole
-              Resource: "*"
-              Condition:
-                StringEquals:
-                  "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 60
 
   FileUploadedFunction:
@@ -307,13 +301,6 @@ Resources:
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
               Resource: !GetAtt SQSObjectCreated.Arn
-            - Effect: Allow
-              Action:
-                - iam:PassRole
-              Resource: "*"
-              Condition:
-                StringEquals:
-                  "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 900
 
   ##### Function resources (TODO: docs for each resource)
@@ -660,31 +647,31 @@ Resources:
   LogsBucketRequestedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${BucketRequestedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-bucket-requested"
       RetentionInDays: 7
 
   LogsChecksumFailureFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ChecksumFailureFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-failure"
       RetentionInDays: 7
 
   LogsChecksumVerificationFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ChecksumVerificationFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-verification"
       RetentionInDays: 7
 
   LogsFileDeletedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${FileDeletedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-file-deleted"
       RetentionInDays: 7
 
   LogsFileUploadedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${FileUploadedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-file-uploaded"
       RetentionInDays: 7
 
   S3BucketRequestedBucket:
