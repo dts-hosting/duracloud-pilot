@@ -10,6 +10,10 @@ Globals:
       LogFormat: JSON
 
 Parameters:
+  AlertEmailAddress:
+    Type: String
+    Default: ""
+    Description: "Email address for alarm notifications (leave empty to disable email alerts)"
   BucketRequestedImageUri:
     Type: String
     Default: ""
@@ -35,6 +39,7 @@ Parameters:
     AllowedValues:
       - arm64
       - x86_64
+    Default: x86_64
     Description: Architecture for Lambda functions
 
 Conditions:
@@ -44,6 +49,7 @@ Conditions:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
     !Not [!Equals [!Ref ChecksumVerificationImageUri, ""]]
+  EnableEmailNotifications: !Not [!Equals [!Ref AlertEmailAddress, ""]]
   FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
   FileUploadedUseExternalImage: !Not [!Equals [!Ref FileUploadedImageUri, ""]]
 
@@ -114,7 +120,7 @@ Resources:
             - Effect: Allow
               Action:
                 - iam:PassRole
-              Resource: "*"
+              Resource: !GetAtt IAMS3ReplicationRole.Arn
               Condition:
                 StringEquals:
                   "iam:PassedToService": "s3.amazonaws.com"
@@ -249,13 +255,6 @@ Resources:
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
               Resource: !GetAtt SQSObjectDeleted.Arn
-            - Effect: Allow
-              Action:
-                - iam:PassRole
-              Resource: "*"
-              Condition:
-                StringEquals:
-                  "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 60
 
   FileUploadedFunction:
@@ -302,13 +301,6 @@ Resources:
                 - sqs:DeleteMessage
                 - sqs:GetQueueAttributes
               Resource: !GetAtt SQSObjectCreated.Arn
-            - Effect: Allow
-              Action:
-                - iam:PassRole
-              Resource: "*"
-              Condition:
-                StringEquals:
-                  "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 900
 
   ##### Function resources (TODO: docs for each resource)
@@ -327,6 +319,15 @@ Resources:
       Period: 300
       Statistic: Maximum
       Threshold: 800 # Alert before hitting 1000 limit
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+      OKActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchDynamoDBChecksumTableWriteCapacityAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -344,6 +345,15 @@ Resources:
       Statistic: Sum
       Threshold: 50000 # Alert if >50K WCU in 5 minutes
       TreatMissingData: notBreaching
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+      OKActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchDynamoDBSchedulerTableWriteCapacityAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -361,6 +371,15 @@ Resources:
       Statistic: Sum
       Threshold: 50000 # Alert if >50K WCU in 5 minutes
       TreatMissingData: notBreaching
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+      OKActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchSQSObjectCreatedAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -377,6 +396,11 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: 1
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   CloudWatchSQSObjectDeletedAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -393,6 +417,11 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: 1
+      # Add SNS notification
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
 
   DynamoDBChecksumTable:
     Type: AWS::DynamoDB::Table
@@ -618,31 +647,31 @@ Resources:
   LogsBucketRequestedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${BucketRequestedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-bucket-requested"
       RetentionInDays: 7
 
   LogsChecksumFailureFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ChecksumFailureFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-failure"
       RetentionInDays: 7
 
   LogsChecksumVerificationFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ChecksumVerificationFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-verification"
       RetentionInDays: 7
 
   LogsFileDeletedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${FileDeletedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-file-deleted"
       RetentionInDays: 7
 
   LogsFileUploadedFunction:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${FileUploadedFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-file-uploaded"
       RetentionInDays: 7
 
   S3BucketRequestedBucket:
@@ -706,6 +735,20 @@ Resources:
                 "aws:SourceArn": !Sub "arn:aws:s3:::${AWS::StackName}*"
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
+
+  SNSEmailAlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: EnableEmailNotifications
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-email-alarm-notifications"
+
+  SNSEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: EnableEmailNotifications
+    Properties:
+      Protocol: email
+      TopicArn: !Ref SNSEmailAlarmTopic
+      Endpoint: !Ref AlertEmailAddress
 
   SQSObjectCreated:
     Type: AWS::SQS::Queue
