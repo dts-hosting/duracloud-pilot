@@ -14,10 +14,16 @@ import (
 	"os"
 )
 
-var accountID string
-var awsCtx accounts.AWSContext
-var region string
-var s3Client *s3.Client
+var (
+	accountID          string
+	awsCtx             accounts.AWSContext
+	bucketLimit        int
+	bucketPrefix       string
+	managedBucketName  string
+	region             string
+	replicationRoleArn string
+	s3Client           *s3.Client
+)
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
@@ -30,23 +36,22 @@ func init() {
 		log.Fatalf("Unable to get AWS account ID: %v", err)
 	}
 
+	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
+	bucketLimit, _ = buckets.GetBucketRequestLimit(os.Getenv("S3_MAX_BUCKETS_PER_REQUEST"))
+	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
 	region = awsConfig.Region
+	replicationRoleArn = os.Getenv("S3_REPLICATION_ROLE_ARN")
 	s3Client = s3.NewFromConfig(awsConfig)
-}
 
-func handler(ctx context.Context, event json.RawMessage) error {
 	awsCtx = accounts.AWSContext{
 		AccountID: accountID,
 		Region:    region,
 	}
-	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
+}
 
-	bucketPrefix := os.Getenv("S3_BUCKET_PREFIX")
-	bucketLimit, _ := buckets.GetBucketRequestLimit(os.Getenv("S3_MAX_BUCKETS_PER_REQUEST"))
+func handler(ctx context.Context, event json.RawMessage) error {
 	bucketsStatus := make(map[string]string)
-	managedBucketName := os.Getenv("S3_MANAGED_BUCKET\n")
-	replicationRoleArn := os.Getenv("S3_REPLICATION_ROLE_ARN")
-
+	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
 		log.Fatalf("Failed to parse event: %v", err)
@@ -96,10 +101,6 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 
 	return nil
-}
-
-func main() {
-	lambda.Start(handler)
 }
 
 func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.BucketRequest) {
@@ -275,4 +276,8 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 
 func rollback(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	return buckets.DeleteBucket(ctx, s3Client, bucketName)
+}
+
+func main() {
+	lambda.Start(handler)
 }

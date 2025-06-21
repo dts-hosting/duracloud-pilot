@@ -13,10 +13,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"log"
+	"os"
 	"time"
 )
 
-var dynamodbClient *dynamodb.Client
+var (
+	checksumTable  string
+	dynamodbClient *dynamodb.Client
+	schedulerTable string
+)
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
@@ -29,7 +34,9 @@ func init() {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
 
+	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
+	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
@@ -68,14 +75,14 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	}, nil
 }
 
-func main() {
-	lambda.Start(handler)
-}
-
 func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
 	// TODO: continue implementation ...
 	// - use db.DeleteItem to make delete calls to checksum and scheduler tables
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil
+}
+
+func main() {
+	lambda.Start(handler)
 }
