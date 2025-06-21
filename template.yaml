@@ -18,6 +18,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for Bucket Requested function (leave empty for local build)"
+  ChecksumExporterImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for Checksum Exporter function (leave empty for local build)"
   ChecksumFailureImageUri:
     Type: String
     Default: ""
@@ -45,6 +49,8 @@ Parameters:
 Conditions:
   BucketRequestedUseExternalImage:
     !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
+  ChecksumExporterUseExternalImage:
+    !Not [!Equals [!Ref ChecksumExporterImageUri, ""]]
   ChecksumFailureUseExternalImage:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
@@ -64,6 +70,7 @@ Resources:
       Dockerfile: Dockerfile
       DockerTag: !Sub "${AWS::StackName}-bucket-requested"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-BucketRequestedFunction"
       Architectures:
         - !Ref LambdaArchitecture
       Description: DuraCloud function that processes bucket requested events
@@ -126,6 +133,59 @@ Resources:
                   "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 60
 
+  ChecksumExporterFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: checksum-exporter
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-checksum-exporter"
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ChecksumExporterFunction"
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that exports DynamoDB checksum table monthly
+      Environment:
+        Variables:
+          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+      ImageUri:
+        !If [
+          ChecksumExporterUseExternalImage,
+          !Ref ChecksumExporterImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      MemorySize: 256
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            # DynamoDB export permissions
+            - Effect: Allow
+              Action:
+                - dynamodb:DescribeTable
+                - dynamodb:ExportTableToPointInTime
+                - dynamodb:DescribeExport
+              Resource:
+                - !GetAtt DynamoDBChecksumTable.Arn
+                - !Sub "${DynamoDBChecksumTable.Arn}/export/*"
+            # S3 permissions for export destination
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:AbortMultipartUpload
+                - s3:ListBucketMultipartUploads
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !Sub "${S3ManagedBucket.Arn}/exports/*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !GetAtt S3ManagedBucket.Arn
+      Timeout: 900
+
   ChecksumFailureFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -135,6 +195,7 @@ Resources:
       Dockerfile: Dockerfile
       DockerTag: !Sub "${AWS::StackName}-checksum-failure"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-ChecksumFailureFunction"
       Architectures:
         - !Ref LambdaArchitecture
       Description: DuraCloud function that processes checksum failure events
@@ -175,6 +236,7 @@ Resources:
       Dockerfile: Dockerfile
       DockerTag: !Sub "${AWS::StackName}-checksum-verification"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-ChecksumVerificationFunction"
       Architectures:
         - !Ref LambdaArchitecture
       Description: DuraCloud function that processes checksum verification via TTL events
@@ -224,6 +286,7 @@ Resources:
       Dockerfile: Dockerfile
       DockerTag: !Sub "${AWS::StackName}-file-deleted"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-FileDeletedFunction"
       Architectures:
         - !Ref LambdaArchitecture
       Description: DuraCloud function that processes s3 object deleted events
@@ -231,7 +294,6 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
-          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
           FileDeletedUseExternalImage,
@@ -266,6 +328,7 @@ Resources:
       Dockerfile: Dockerfile
       DockerTag: !Sub "${AWS::StackName}-file-uploaded"
     Properties:
+      FunctionName: !Sub "${AWS::StackName}-FileUploadedFunction"
       Architectures:
         - !Ref LambdaArchitecture
       Description: DuraCloud function that processes s3 object uploaded events
@@ -273,7 +336,6 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
-          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
           FileUploadedUseExternalImage,
@@ -304,6 +366,26 @@ Resources:
       Timeout: 900
 
   ##### Function resources (TODO: docs for each resource)
+  CloudWatchChecksumExporterFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-exporter-errors"
+      AlarmDescription: "Error generating checksum table export"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChecksumExporterFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -466,6 +548,16 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+  EventsChecksumExporterSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger monthly DynamoDB checksum table exports"
+      ScheduleExpression: "cron(0 6 1 * ? *)" # 1st day of month at 6 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ChecksumExporterFunction.Arn
+          Id: "ChecksumExporterTarget"
+
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
@@ -590,6 +682,14 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
 
+  LambdaChecksumExporterInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ChecksumExporterFunction.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventsChecksumExporterSchedule.Arn
+
   LambdaDynamoDBChecksumFailureSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -649,6 +749,12 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-bucket-requested"
       RetentionInDays: 7
+
+  LogsChecksumExporterFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-exporter"
+      RetentionInDays: 30
 
   LogsChecksumFailureFunction:
     Type: AWS::Logs::LogGroup

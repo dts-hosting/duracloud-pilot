@@ -67,6 +67,7 @@ make invoke func=FileUploadedFunction event=events/file-uploaded/event.json
 make invoke func=FileDeletedFunction event=events/file-deleted/event.json
 make invoke func=ChecksumVerificationFunction event=events/checksum-verification/event.json
 make invoke func=ChecksumFailureFunction event=events/checksum-failure/event.json
+make invoke func=ChecksumExporterFunction event=events/checksum-exporter/event.json
 ```
 
 However, results will vary depending on how strongly the function depends on

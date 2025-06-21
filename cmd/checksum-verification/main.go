@@ -16,8 +16,12 @@ import (
 	"os"
 )
 
-var dynamodbClient *dynamodb.Client
-var s3Client *s3.Client
+var (
+	checksumTable  string
+	dynamodbClient *dynamodb.Client
+	s3Client       *s3.Client
+	schedulerTable string
+)
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
@@ -30,14 +34,16 @@ func init() {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
 
+	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
+	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
+
+	// tmp
+	fmt.Println(schedulerTable)
 }
 
 func handler(ctx context.Context, event events.DynamoDBEvent) error {
-	checksumTable := os.Getenv("DYNAMODB_CHECKSUM_TABLE")
-	//schedulerTable := os.Getenv("DYNAMODB_SCHEDULER_TABLE")
-
 	for _, record := range event.Records {
 		if !isTTLExpiry(record) {
 			continue
@@ -84,10 +90,6 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 	return nil
 }
 
-func main() {
-	lambda.Start(handler)
-}
-
 func extractBucketAndObject(record events.DynamoDBEventRecord) (string, string, error) {
 	bucketAttr, exists := record.Change.OldImage["Bucket"]
 	if !exists {
@@ -107,4 +109,8 @@ func isTTLExpiry(record events.DynamoDBEventRecord) bool {
 		record.UserIdentity != nil &&
 		record.UserIdentity.Type == "Service" &&
 		record.UserIdentity.PrincipalID == "dynamodb.amazonaws.com"
+}
+
+func main() {
+	lambda.Start(handler)
 }
