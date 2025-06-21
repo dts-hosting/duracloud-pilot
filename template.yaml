@@ -525,7 +525,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "Trigger monthly DynamoDB checksum table exports"
-      ScheduleExpression: "cron(0 6 1 * ? *)"  # 1st day of month at 6 AM UTC
+      ScheduleExpression: "cron(0 6 1 * ? *)" # 1st day of month at 6 AM UTC
       State: ENABLED
       Targets:
         - Arn: !GetAtt ChecksumExporterFunction.Arn

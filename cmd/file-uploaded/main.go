@@ -40,6 +40,10 @@ func init() {
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
 	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
+
+	// tmp
+	fmt.Println(checksumTable)
+	fmt.Println(schedulerTable)
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {

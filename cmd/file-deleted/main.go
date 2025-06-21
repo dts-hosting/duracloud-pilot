@@ -37,6 +37,10 @@ func init() {
 	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
+
+	// tmp
+	fmt.Println(checksumTable)
+	fmt.Println(schedulerTable)
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
