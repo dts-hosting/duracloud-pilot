@@ -81,6 +81,7 @@ Resources:
           S3_MANAGED_BUCKET: !Ref S3ManagedBucket
           S3_MAX_BUCKETS_PER_REQUEST: 5
           S3_REPLICATION_ROLE_ARN: !GetAtt IAMS3ReplicationRole.Arn
+          S3_USERS_GROUP_ARN: !GetAtt IAMS3UsersGroup.Arn
       ImageUri:
         !If [
           BucketRequestedUseExternalImage,
@@ -891,6 +892,12 @@ Resources:
       MessageRetentionPeriod: 1209600
 
   ##### IAM group resources
+  IAMS3PowerUsersGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-S3PowerUsers"
+      Path: "/"
+
   IAMS3UsersGroup:
     Type: AWS::IAM::Group
     Properties:
@@ -947,6 +954,7 @@ Resources:
               - !Sub "arn:aws:s3:::${AWS::StackName}*-logs"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-logs/*"
       Groups:
+        - !Ref IAMS3PowerUsersGroup
         - !Ref IAMS3UsersGroup
 
   ##### IAM user resources

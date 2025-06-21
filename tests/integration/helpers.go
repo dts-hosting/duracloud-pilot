@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -214,6 +215,16 @@ func getBucketNotifications(ctx context.Context, s3Client *s3.Client, bucketName
 	return result
 }
 
+func getBucketPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) *string {
+	result, err := s3Client.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	})
+	if err != nil {
+		return nil
+	}
+	return result.Policy
+}
+
 func getBucketPublicAccessBlock(ctx context.Context, s3Client *s3.Client, bucketName string) *s3.GetPublicAccessBlockOutput {
 	result, err := s3Client.GetPublicAccessBlock(ctx, &s3.GetPublicAccessBlockInput{
 		Bucket: aws.String(bucketName),
@@ -311,12 +322,38 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 			assert.NotEmpty(t, publicAccessBlock.PublicAccessBlockConfiguration)
 			assert.False(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy)
 		})
+
+		t.Run("PublicAccessPolicy", func(t *testing.T) {
+			policy := getBucketPolicy(ctx, s3Client, bucketName)
+			assert.NotNil(t, policy)
+
+			var policyDoc map[string]interface{}
+			err := json.Unmarshal([]byte(*policy), &policyDoc)
+			assert.NoError(t, err)
+
+			statements := policyDoc["Statement"].([]interface{})
+			statement := statements[0].(map[string]interface{})
+			assert.Equal(t, "AllowPublicRead", statement["Sid"])
+		})
 	} else {
 		t.Run("Lifecycle", func(t *testing.T) {
 			lifecycle := getBucketLifecycle(ctx, s3Client, bucketName)
 			assert.NotNil(t, lifecycle)
 			assert.NotEmpty(t, lifecycle.Rules)
 			assert.Equal(t, types.TransitionStorageClassGlacierIr, lifecycle.Rules[0].Transitions[0].StorageClass)
+		})
+
+		t.Run("GlacierIRRestrictionPolicy", func(t *testing.T) {
+			policy := getBucketPolicy(ctx, s3Client, bucketName)
+			assert.NotNil(t, policy)
+
+			var policyDoc map[string]interface{}
+			err := json.Unmarshal([]byte(*policy), &policyDoc)
+			assert.NoError(t, err)
+
+			statements := policyDoc["Statement"].([]interface{})
+			statement := statements[0].(map[string]interface{})
+			assert.Equal(t, "DenyOperationsOnGlacierInstantRetrieval", statement["Sid"])
 		})
 	}
 

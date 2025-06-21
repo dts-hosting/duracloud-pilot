@@ -11,12 +11,13 @@ providing a need for tools to ensure that these documents remain available.
 There are many options for file storage and backup, with a growing trend toward the use of service providers offering
 off-site storage and backup solutions. These solutions are enticing, but several concerns often remain:
 
-- I just want to upload files to a storage service, how can I do this in a simple and reliable way?
+- How do I upload files to the storage service in a simple and reliable way?
 - How do I ensure that files remain intact over time after I have transferred them to the storage service?
 - How do I ensure that the storage service that I am using receives a copy of my local files?
 - How do I retrieve my content once it is stored?
 - How do I recover a file if it has been overwritten or corrupted?
 - How do I make my content publicly accessible at a stable url?
+- How am I protected against the storage service becoming obsolete or going away?
 
 How does DuraCloud solve these problems?
 
@@ -28,6 +29,12 @@ that handles these concerns:
 
 1. Configuring more "complex" aspects of S3 to support storage and preservation goals.
 2. Providing additional value-added features via a set of scheduled tasks.
+
+Preservation services are intended for long-term storage and future access, and while the technology for
+many of these services has been impressive, the sustainability of the services themselves has been less so.
+Building DuraCloud as a form of S3 proxy service backed by Amazon's global infrastructure, we
+believe, provides one of the best guarantees for long-term sustainability and access to the files you
+are storing.
 
 **Ultimately, the goal of DuraCloud is to make the use of Amazon S3 easy for users and robust for preservation.**
 
@@ -44,7 +51,8 @@ Principally, these bucket configurations are automatically applied as buckets ar
 
     <Card title="Lifecycle transitions">
         Files are uploaded to the standard storage tier and transition to the Glacier Instant
-        Retrieval tier after 3 days.
+        Retrieval tier after 3 days. Theses file cannot then be downloaded, modified or deleted
+        by regular users.
 
         [Learn more](https://aws.amazon.com/s3/storage-classes/)
     </Card>
@@ -71,7 +79,7 @@ Principally, these bucket configurations are automatically applied as buckets ar
     <Card title="Public access">
         Buckets can be created as publicly accessible then files will be available using a url. Files will
         be stored in the standard storage tier and not transitioned to Glacier, however replication will still
-        occur and the backup files will be stored in Glacier.
+        occur and the backup copies will be stored in Glacier.
 
         [Learn
         more](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/GettingStarted.SimpleDistribution.html)
@@ -95,7 +103,11 @@ In addition, these operations are run on a schedule:
 
 <CardGrid>
     <Card title="Fixity checks">
-        Performs checksum verification every 6 months.
+        Performs checksum verification for each file every 6 months.
+    </Card>
+
+    <Card title="Checksum export">
+        Checksum metadata for all files is exported every month.
     </Card>
 
     <Card title="File manifest">
