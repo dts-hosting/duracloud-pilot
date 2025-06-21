@@ -13,3 +13,4 @@ docs-src/dist/
 docs-src/node_modules/
 example
 node_modules
+response.json

@@ -162,6 +162,7 @@ Resources:
             # DynamoDB export permissions
             - Effect: Allow
               Action:
+                - dynamodb:DescribeTable
                 - dynamodb:ExportTableToPointInTime
                 - dynamodb:DescribeExport
               Resource:
