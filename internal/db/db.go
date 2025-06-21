@@ -13,13 +13,13 @@ import (
 )
 
 type ChecksumRecord struct {
-	Bucket              string `dynamodbav:"Bucket"`
-	Object              string `dynamodbav:"Object"`
-	Checksum            string `dynamodbav:"Checksum"`
-	LastChecksumDate    string `dynamodbav:"LastChecksumDate"`
-	LastChecksumMessage string `dynamodbav:"LastChecksumMessage"`
-	LastChecksumSuccess bool   `dynamodbav:"LastChecksumSuccess"`
-	NextChecksumDate    string `dynamodbav:"NextChecksumDate"`
+	Bucket              string    `dynamodbav:"Bucket"`
+	Object              string    `dynamodbav:"Object"`
+	Checksum            string    `dynamodbav:"Checksum"`
+	LastChecksumDate    time.Time `dynamodbav:"LastChecksumDate"`
+	LastChecksumMessage string    `dynamodbav:"LastChecksumMessage"`
+	LastChecksumSuccess bool      `dynamodbav:"LastChecksumSuccess"`
+	NextChecksumDate    time.Time `dynamodbav:"NextChecksumDate"`
 }
 
 func DeleteChecksumRecord(
@@ -106,9 +106,10 @@ func PutChecksumRecord(
 			"Bucket":              &types.AttributeValueMemberS{Value: record.Bucket},
 			"Object":              &types.AttributeValueMemberS{Value: record.Object},
 			"Checksum":            &types.AttributeValueMemberS{Value: record.Checksum},
-			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate},
+			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate.Format(time.RFC3339)},
 			"LastChecksumMessage": &types.AttributeValueMemberS{Value: record.LastChecksumMessage},
 			"LastChecksumSuccess": &types.AttributeValueMemberBOOL{Value: record.LastChecksumSuccess},
+			"NextChecksumDate":    &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
 		},
 	})
 	return err
@@ -119,15 +120,14 @@ func ScheduleNextVerification(
 	client *dynamodb.Client,
 	schedulerTable string,
 	record ChecksumRecord,
-	scheduledTime time.Time,
 ) error {
 	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(schedulerTable),
 		Item: map[string]types.AttributeValue{
 			"Bucket":           &types.AttributeValueMemberS{Value: record.Bucket},
 			"Object":           &types.AttributeValueMemberS{Value: record.Object},
-			"NextChecksumDate": &types.AttributeValueMemberS{Value: scheduledTime.Format(time.RFC3339)},
-			"TTL":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", scheduledTime.Unix())},
+			"NextChecksumDate": &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
+			"TTL":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", record.NextChecksumDate.Unix())},
 		},
 	})
 	return err
