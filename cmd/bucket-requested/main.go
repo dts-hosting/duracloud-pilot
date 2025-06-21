@@ -23,6 +23,7 @@ var (
 	region             string
 	replicationRoleArn string
 	s3Client           *s3.Client
+	s3UsersGroupArn    string
 )
 
 func init() {
@@ -42,10 +43,12 @@ func init() {
 	region = awsConfig.Region
 	replicationRoleArn = os.Getenv("S3_REPLICATION_ROLE_ARN")
 	s3Client = s3.NewFromConfig(awsConfig)
+	s3UsersGroupArn = os.Getenv("S3_USERS_GROUP_ARN")
 
 	awsCtx = accounts.AWSContext{
-		AccountID: accountID,
-		Region:    region,
+		AccountID:       accountID,
+		Region:          region,
+		S3UsersGroupArn: s3UsersGroupArn,
 	}
 }
 
@@ -255,6 +258,7 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 	if err != nil {
 		localStatus[fullBucketName] = err.Error()
 		_ = rollback(ctx, s3Client, fullBucketName)
+		_ = rollback(ctx, s3Client, replicationBucketName)
 		bucket.ResultChan <- localStatus
 		return
 	}
@@ -265,6 +269,16 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 		if err != nil {
 			localStatus[fullBucketName] = err.Error()
 			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
+			bucket.ResultChan <- localStatus
+			return
+		}
+	} else {
+		err := buckets.AddGlacierIRRestrictionPolicy(ctx, s3Client, fullBucketName)
+		if err != nil {
+			localStatus[fullBucketName] = err.Error()
+			_ = rollback(ctx, s3Client, fullBucketName)
+			_ = rollback(ctx, s3Client, replicationBucketName)
 			bucket.ResultChan <- localStatus
 			return
 		}
