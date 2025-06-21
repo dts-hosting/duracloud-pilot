@@ -342,19 +342,6 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 			assert.NotEmpty(t, lifecycle.Rules)
 			assert.Equal(t, types.TransitionStorageClassGlacierIr, lifecycle.Rules[0].Transitions[0].StorageClass)
 		})
-
-		t.Run("GlacierIRRestrictionPolicy", func(t *testing.T) {
-			policy := getBucketPolicy(ctx, s3Client, bucketName)
-			assert.NotNil(t, policy)
-
-			var policyDoc map[string]interface{}
-			err := json.Unmarshal([]byte(*policy), &policyDoc)
-			assert.NoError(t, err)
-
-			statements := policyDoc["Statement"].([]interface{})
-			statement := statements[0].(map[string]interface{})
-			assert.Equal(t, "DenyOperationsOnGlacierInstantRetrieval", statement["Sid"])
-		})
 	}
 
 	t.Run("Notifications", func(t *testing.T) {

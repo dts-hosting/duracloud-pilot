@@ -7,9 +7,9 @@ import (
 )
 
 type AWSContext struct {
-	AccountID       string
-	Region          string
-	S3UsersGroupArn string
+	AccountID string
+	Region    string
+	StackName string
 }
 
 type contextKey string

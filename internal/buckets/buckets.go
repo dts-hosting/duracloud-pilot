@@ -128,46 +128,6 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 	return nil
 }
 
-func AddGlacierIRRestrictionPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	awsCtx := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
-
-	policy := map[string]interface{}{
-		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
-			{
-				"Sid":       "DenyOperationsOnGlacierInstantRetrieval",
-				"Effect":    "Deny",
-				"Principal": awsCtx.S3UsersGroupArn,
-				"Action": []string{
-					"s3:GetObject",
-					"s3:PutObject",
-					"s3:DeleteObject",
-				},
-				"Resource": fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
-				"Condition": map[string]interface{}{
-					"StringEquals": map[string]interface{}{
-						"s3:StorageClass": "GLACIER_IR",
-					},
-				},
-			},
-		},
-	}
-
-	policyJSON, err := json.Marshal(policy)
-	if err != nil {
-		return fmt.Errorf("failed to marshal glacier IR restriction policy: %v", err)
-	}
-
-	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
-		Bucket: aws.String(bucketName),
-		Policy: aws.String(string(policyJSON)),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to put glacier IR restriction policy: %v", err)
-	}
-	return nil
-}
-
 func AddLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string, storageClass types.TransitionStorageClass, transitionDays int32) error {
 	_, err := s3Client.PutBucketLifecycleConfiguration(ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(bucketName),

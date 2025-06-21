@@ -23,7 +23,6 @@ var (
 	region             string
 	replicationRoleArn string
 	s3Client           *s3.Client
-	s3UsersGroupArn    string
 )
 
 func init() {
@@ -43,12 +42,12 @@ func init() {
 	region = awsConfig.Region
 	replicationRoleArn = os.Getenv("S3_REPLICATION_ROLE_ARN")
 	s3Client = s3.NewFromConfig(awsConfig)
-	s3UsersGroupArn = os.Getenv("S3_USERS_GROUP_ARN")
+	stackName := bucketPrefix
 
 	awsCtx = accounts.AWSContext{
-		AccountID:       accountID,
-		Region:          region,
-		S3UsersGroupArn: s3UsersGroupArn,
+		AccountID: accountID,
+		Region:    region,
+		StackName: stackName,
 	}
 }
 
@@ -266,15 +265,6 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 	// Note: we have to do this after removing the temporary DENY policy
 	if buckets.IsPublicBucket(fullBucketName) {
 		err = buckets.AddPublicPolicy(ctx, s3Client, fullBucketName)
-		if err != nil {
-			localStatus[fullBucketName] = err.Error()
-			_ = rollback(ctx, s3Client, fullBucketName)
-			_ = rollback(ctx, s3Client, replicationBucketName)
-			bucket.ResultChan <- localStatus
-			return
-		}
-	} else {
-		err := buckets.AddGlacierIRRestrictionPolicy(ctx, s3Client, fullBucketName)
 		if err != nil {
 			localStatus[fullBucketName] = err.Error()
 			_ = rollback(ctx, s3Client, fullBucketName)
