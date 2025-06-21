@@ -359,6 +359,26 @@ Resources:
       Timeout: 900
 
   ##### Function resources (TODO: docs for each resource)
+  CloudWatchChecksumExporterFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-exporter-errors"
+      AlarmDescription: "Error generating checksum table export"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChecksumExporterFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      AlarmActions: !If
+        - EnableEmailNotifications
+        - [!Ref SNSEmailAlarmTopic]
+        - !Ref "AWS::NoValue"
+
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
