@@ -262,29 +262,11 @@ func iamRoleExists(ctx context.Context, iamClient *iam.Client, roleName string) 
 }
 
 func lambdaFunctionExists(ctx context.Context, lambdaClient *lambda.Client, functionName string) bool {
-	input := &lambda.ListFunctionsInput{}
-
-	result, err := lambdaClient.ListFunctions(ctx, input)
-	if err != nil {
-		return false
-	}
-
-	for _, function := range result.Functions {
-		if strings.HasPrefix(*function.FunctionName, functionName) {
-			return true
-		}
-	}
-
-	return false
+	_, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
+		FunctionName: aws.String(functionName),
+	})
+	return err == nil
 }
-
-//func objectExists(ctx context.Context, s3Client *s3.Client, bucketName, key string) bool {
-//	_, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
-//		Bucket: aws.String(bucketName),
-//		Key:    aws.String(key),
-//	})
-//	return err == nil
-//}
 
 func uploadRequestAndWait(t *testing.T, ctx context.Context, s3Client *s3.Client, stackName string, buckets []string, waitTime time.Duration) {
 	var content strings.Builder
