@@ -18,6 +18,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for Bucket Requested function (leave empty for local build)"
+  ChecksumExporterImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for Checksum Exporter function (leave empty for local build)"
   ChecksumFailureImageUri:
     Type: String
     Default: ""
@@ -45,6 +49,8 @@ Parameters:
 Conditions:
   BucketRequestedUseExternalImage:
     !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
+  ChecksumExporterUseExternalImage:
+    !Not [!Equals [!Ref ChecksumExporterImageUri, ""]]
   ChecksumFailureUseExternalImage:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
@@ -125,6 +131,57 @@ Resources:
                 StringEquals:
                   "iam:PassedToService": "s3.amazonaws.com"
       Timeout: 60
+
+  ChecksumExporterFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: checksum-exporter
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-checksum-exporter"
+    Properties:
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that exports DynamoDB checksum table monthly
+      Environment:
+        Variables:
+          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+      ImageUri:
+        !If [
+          ChecksumExporterUseExternalImage,
+          !Ref ChecksumExporterImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      MemorySize: 256
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            # DynamoDB export permissions
+            - Effect: Allow
+              Action:
+                - dynamodb:ExportTableToPointInTime
+                - dynamodb:DescribeExport
+              Resource:
+                - !GetAtt DynamoDBChecksumTable.Arn
+                - !Sub "${DynamoDBChecksumTable.Arn}/export/*"
+            # S3 permissions for export destination
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:AbortMultipartUpload
+                - s3:ListBucketMultipartUploads
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !Sub "${S3ManagedBucket.Arn}/exports/*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !GetAtt S3ManagedBucket.Arn
+      Timeout: 900
 
   ChecksumFailureFunction:
     Type: AWS::Serverless::Function
@@ -231,7 +288,6 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
-          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
           FileDeletedUseExternalImage,
@@ -273,7 +329,6 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
-          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
           FileUploadedUseExternalImage,
@@ -466,6 +521,16 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+  EventsChecksumExporterSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger monthly DynamoDB checksum table exports"
+      ScheduleExpression: "cron(0 6 1 * ? *)"  # 1st day of month at 6 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ChecksumExporterFunction.Arn
+          Id: "ChecksumExporterTarget"
+
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
@@ -590,6 +655,14 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
 
+  LambdaChecksumExporterInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ChecksumExporterFunction.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventsChecksumExporterSchedule.Arn
+
   LambdaDynamoDBChecksumFailureSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -649,6 +722,12 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-bucket-requested"
       RetentionInDays: 7
+
+  LogsChecksumExporterFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-exporter"
+      RetentionInDays: 30
 
   LogsChecksumFailureFunction:
     Type: AWS::Logs::LogGroup

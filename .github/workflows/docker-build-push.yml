@@ -25,6 +25,8 @@ jobs:
       matrix:
         function:
           - bucket-requested
+          - checksum-exporter
+          - checksum-failure
           - checksum-verification
           - file-deleted
           - file-uploaded
