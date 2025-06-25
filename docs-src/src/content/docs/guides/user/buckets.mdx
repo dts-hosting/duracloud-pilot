@@ -1,0 +1,37 @@
+---
+title: How to create buckets
+sidebar:
+  order: 5
+---
+
+To create a bucket you must create a text file (.txt) containing the names of up to
+five buckets you want to create.
+
+- Each bucket name must be entered on it's own line
+- Bucket names can only contain alphanumeric characters and "-", no special characters
+- Bucket names should be no more than 256 characters total
+- Bucket names are automatically prefixed with the stack name, do not include the stack name in the text file
+- To create a publicly accessible bucket the bucket name must end with "-public"
+
+There are some reserved **prefixes** and **suffixes** that cannot be used in the bucket name:
+
+- `duracloud-` - this is always already included as the foremost bucket name prefix
+- `-bucket-requested` - Used for bucket request files
+- `-logs` - Used for access logging buckets
+- `-managed` - Used for system management buckets
+- `-public` - Used to identify public buckets
+- `-replication` - Used for replication target buckets
+
+Upload this file to the `duracloud-$ID-bucket-requested` bucket. The file will be processed
+in the background and an attempt will be made to create each bucket. In a short time (0-2
+minutes is normal) a report file will be uploaded to the stack managed bucket inside the
+`bucket-requested` "folder" providing details about what happened.
+
+Review this file when it becomes available.
+
+If you refresh your client view or otherwise reconnect to s3 any buckets that were
+successfully created and configured will now be present. You will also see an additional
+replication bucket for each bucket that was created (that uses the same name but but has a
+"-replication" suffix). You will be able to list files in these buckets but not download them.
+
+The newly created buckets will now be usable and files can be uploaded.
