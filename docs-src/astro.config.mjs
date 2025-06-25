@@ -36,6 +36,11 @@ export default defineConfig({
           collapsed: false,
           autogenerate: { directory: "guides/technical/" },
         },
+        {
+          label: "Hosting",
+          collapsed: false,
+          autogenerate: { directory: "hosting" },
+        }
       ],
       social: [
         {
