@@ -1,0 +1,9 @@
+Checksum verification failed for:
+
+Account: {{.Account}}
+Stack: {{.Stack}}
+Time: {{.Date}}
+
+Bucket: {{.Bucket}}
+Object: {{.Object}}
+Error: {{.ErrorMessage}}

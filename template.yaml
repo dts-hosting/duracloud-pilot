@@ -206,6 +206,8 @@ Resources:
       Environment:
         Variables:
           S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+          SNS_TOPIC_ARN: !GetAtt SNSEmailAlarmTopic.Arn
+          STACK_NAME: !Ref AWS::StackName
       ImageUri:
         !If [
           ChecksumFailureUseExternalImage,
@@ -231,6 +233,10 @@ Resources:
                 - dynamodb:ListStreams
               Resource:
                 - !GetAtt DynamoDBChecksumTable.StreamArn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref SNSEmailAlarmTopic
       Timeout: 60
 
   ChecksumVerificationFunction:
