@@ -87,6 +87,8 @@ Resources:
           !Ref BucketRequestedImageUri,
           !Ref "AWS::NoValue",
         ]
+      LoggingConfig:
+        LogGroup: !Ref LogsBucketRequestedFunction
       MemorySize: 128
       PackageType: Image
       Policies:
@@ -156,6 +158,8 @@ Resources:
           !Ref ChecksumExporterImageUri,
           !Ref "AWS::NoValue",
         ]
+      LoggingConfig:
+        LogGroup: !Ref LogsChecksumExporterFunction
       MemorySize: 256
       PackageType: Image
       Policies:
@@ -208,6 +212,8 @@ Resources:
           !Ref ChecksumFailureImageUri,
           !Ref "AWS::NoValue",
         ]
+      LoggingConfig:
+        LogGroup: !Ref LogsChecksumFailureFunction
       MemorySize: 128
       PackageType: Image
       Policies:
@@ -250,6 +256,8 @@ Resources:
           !Ref ChecksumVerificationImageUri,
           !Ref "AWS::NoValue",
         ]
+      LoggingConfig:
+        LogGroup: !Ref LogsChecksumVerificationFunction
       MemorySize: 256
       PackageType: Image
       Policies:
@@ -300,6 +308,8 @@ Resources:
           !Ref FileDeletedImageUri,
           !Ref "AWS::NoValue",
         ]
+      LoggingConfig:
+        LogGroup: !Ref LogsFileDeletedFunction
       MemorySize: 128
       PackageType: Image
       Policies:
@@ -342,6 +352,8 @@ Resources:
           !Ref FileUploadedImageUri,
           !Ref "AWS::NoValue",
         ]
+      LoggingConfig:
+        LogGroup: !Ref LogsFileUploadedFunction
       MemorySize: 256
       PackageType: Image
       Policies:
