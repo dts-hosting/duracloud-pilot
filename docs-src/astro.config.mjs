@@ -40,7 +40,7 @@ export default defineConfig({
           label: "Hosting",
           collapsed: false,
           autogenerate: { directory: "hosting" },
-        }
+        },
       ],
       social: [
         {
