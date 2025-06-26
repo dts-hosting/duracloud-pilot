@@ -18,22 +18,31 @@ import (
 )
 
 const (
+	AwsPrefix       = "aws-"
 	DuraCloudPrefix = "duracloud-"
 
 	BucketRequestedSuffix = "-bucket-requested"
 	LogsSuffix            = "-logs"
 	ManagedSuffix         = "-managed"
 	PublicSuffix          = "-public"
-	ReplicationSuffix     = "-replication"
+	ReplicationSuffix     = "-repl"
 
 	ApplicationTagValue              = "DuraCloud"
+	BucketNameMaxChars               = 63
 	BucketRequestedFileErrorKey      = "error-processing-bucket-requested-file"
 	LifeCycleTransitionToGlacierDays = 3
 	NonCurrentVersionExpirationDays  = 2
 )
 
 var (
+	ReservedPrefixes = []string{
+		"-",
+		AwsPrefix,
+		DuraCloudPrefix,
+	}
+
 	ReservedSuffixes = []string{
+		"-",
 		BucketRequestedSuffix,
 		LogsSuffix,
 		ManagedSuffix,
@@ -369,8 +378,8 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	scanner := bufio.NewScanner(resp.Body)
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if ValidateBucketName(line) {
+		line := strings.ToLower(scanner.Text())
+		if ValidateBucketName(ctx, line) {
 			buckets = append(buckets, line)
 		} else {
 			return nil, fmt.Errorf("invalid bucket name requested: %s", line)
@@ -388,6 +397,16 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	}
 
 	return buckets, nil
+}
+
+func HasReservedPrefix(name string) bool {
+	for _, prefix := range ReservedPrefixes {
+		if strings.HasPrefix(name, prefix) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func HasReservedSuffix(name string) bool {
@@ -462,17 +481,22 @@ func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) e
 	return nil
 }
 
-func ValidateBucketName(name string) bool {
-	var (
-		whitelist  = "a-zA-Z0-9-"
-		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
-	)
-
-	if disallowed.MatchString(name) {
+func ValidateBucketName(ctx context.Context, name string) bool {
+	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
+	if !ok {
 		return false
 	}
 
-	if HasReservedSuffix(name) {
+	if len(name) < 1 || len(name) > BucketNameMaxChars-(len(awsCtx.StackName)+len(ReplicationSuffix)) {
+		return false
+	}
+
+	var (
+		whitelist  = "a-z0-9-"
+		disallowed = regexp.MustCompile(fmt.Sprintf("[^%s]+", whitelist))
+	)
+
+	if disallowed.MatchString(name) || HasReservedPrefix(name) || HasReservedSuffix(name) {
 		return false
 	}
 
