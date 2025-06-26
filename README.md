@@ -25,25 +25,34 @@ make docs-install
 
 ## Usage
 
+Export a profile or otherwise configure AWS credentials. One option is to
+create a `.env` file and add AWS environment variables to it:
+
+```txt
+AWS_PROFILE=default
+```
+
+That's all the setup needed for using the provided `make` tasks.
+
 ```bash
 make pull # download the required docker images
 make build # prebuild images
 
 # deploy
-AWS_PROFILE=duracloudexp make deploy stack=duracloud-lyrasis
+make deploy stack=duracloud-lyrasis
 
 # get the support user access key and secret
-AWS_PROFILE=duracloudexp make creds stack=duracloud-lyrasis
+make creds stack=duracloud-lyrasis
 
 # trigger: test bucket creation
-AWS_PROFILE=duracloudexp aws s3 cp files/create-buckets.txt s3://duracloud-lyrasis-bucket-requested/
+make copy file=files/create-buckets.txt bucket=duracloud-lyrasis-bucket-requested
 
 # output logs (optional: interval=30m, default is 5m)
-AWS_PROFILE=duracloudexp make logs func=BucketRequestedFunction stack=duracloud-lyrasis
+make logs func=BucketRequestedFunction stack=duracloud-lyrasis
 
 # destroy
-AWS_PROFILE=duracloudexp make bucket action=empty bucket=duracloud-lyrasis-bucket-requested
-AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
+make bucket action=empty bucket=duracloud-lyrasis-bucket-requested
+make delete stack=duracloud-lyrasis
 ```
 
 - Setting `stack` uniquely allows for multiple deployments to the same account.
@@ -54,10 +63,16 @@ AWS_PROFILE=duracloudexp make delete stack=duracloud-lyrasis
 The `make bucket` task can be used to create, clear and delete buckets:
 
 ```bash
-AWS_PROFILE=duracloudexp make bucket action=list
-AWS_PROFILE=duracloudexp make bucket action=create bucket=duracloud-pilot-bucket1
-AWS_PROFILE=duracloudexp make bucket action=empty bucket=duracloud-pilot-bucket1
-AWS_PROFILE=duracloudexp make bucket action=delete bucket=duracloud-pilot-bucket1
+make bucket action=list
+make bucket action=create bucket=duracloud-pilot-bucket1
+make bucket action=empty bucket=duracloud-pilot-bucket1
+make bucket action=delete bucket=duracloud-pilot-bucket1
+```
+
+There is a command to clear out non-managed resources:
+
+```bash
+make cleanup stack=duracloud-lyrasis
 ```
 
 The `make invoke` task can be used to run functions locally:
@@ -79,5 +94,5 @@ configuration and event payloads.
 The stack indicated by `STACK_NAME` must be deployed first.
 
 ```bash
-AWS_PROFILE=duracloudexp make test stack=duracloud-lyrasis
+make test stack=duracloud-lyrasis
 ```

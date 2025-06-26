@@ -1,5 +1,8 @@
 SHELL:=/bin/bash
 
+-include .env
+export $(shell sed 's/=.*//' .env 2>/dev/null)
+
 ARCH:=$(shell uname -m)
 
 ifeq ($(ARCH),x86_64)
@@ -21,6 +24,10 @@ build: ## Build the project (images, artifacts, etc.)
 .PHONY: cleanup
 cleanup: ## Cleanup bucket resources for a stack
 	@./scripts/cleanup-stack.sh $(stack)
+
+.PHONY: copy
+copy: ## Copy a file to a bucket (without prefixes)
+	@aws s3 cp $(file) s3://$(bucket)/
 
 .PHONY: creds
 creds: ## Output the test user access key and secret
