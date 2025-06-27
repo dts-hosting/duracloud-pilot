@@ -123,6 +123,12 @@ func processUploadedObject(
 			true,
 			nextScheduledTime,
 		}
+
+		err := db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
+		if err != nil {
+			log.Printf("Failed to schedule next verification: %v", err)
+		}
+
 	}
 		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 	if err != nil {
