@@ -55,7 +55,7 @@ Conditions:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
     !Not [!Equals [!Ref ChecksumVerificationImageUri, ""]]
-  EnableEmailNotifications: !Not [!Equals [!Ref AlertEmailAddress, ""]]
+  EnableEmailAlertNotifications: !Not [!Equals [!Ref AlertEmailAddress, ""]]
   FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
   FileUploadedUseExternalImage: !Not [!Equals [!Ref FileUploadedImageUri, ""]]
 
@@ -206,7 +206,7 @@ Resources:
       Environment:
         Variables:
           S3_MANAGED_BUCKET: !Ref S3ManagedBucket
-          SNS_TOPIC_ARN: !GetAtt SNSEmailAlarmTopic.Arn
+          SNS_TOPIC_ARN: !Ref SNSEmailAlertTopic
           STACK_NAME: !Ref AWS::StackName
       ImageUri:
         !If [
@@ -236,7 +236,7 @@ Resources:
             - Effect: Allow
               Action:
                 - sns:Publish
-              Resource: !Ref SNSEmailAlarmTopic
+              Resource: !Ref SNSEmailAlertTopic
       Timeout: 60
 
   ChecksumVerificationFunction:
@@ -400,8 +400,8 @@ Resources:
       Statistic: Sum
       Threshold: 0
       AlarmActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
@@ -421,12 +421,12 @@ Resources:
       Threshold: 800 # Alert before hitting 1000 limit
       # Add SNS notification
       AlarmActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
       OKActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
   CloudWatchDynamoDBChecksumTableWriteCapacityAlarm:
@@ -447,12 +447,12 @@ Resources:
       TreatMissingData: notBreaching
       # Add SNS notification
       AlarmActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
       OKActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
   CloudWatchDynamoDBSchedulerTableWriteCapacityAlarm:
@@ -473,12 +473,12 @@ Resources:
       TreatMissingData: notBreaching
       # Add SNS notification
       AlarmActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
       OKActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
   CloudWatchSQSObjectCreatedAlarm:
@@ -498,8 +498,8 @@ Resources:
       Threshold: 1
       # Add SNS notification
       AlarmActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
   CloudWatchSQSObjectDeletedAlarm:
@@ -519,8 +519,8 @@ Resources:
       Threshold: 1
       # Add SNS notification
       AlarmActions: !If
-        - EnableEmailNotifications
-        - [!Ref SNSEmailAlarmTopic]
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
   DynamoDBChecksumTable:
@@ -860,18 +860,17 @@ Resources:
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
 
-  SNSEmailAlarmTopic:
+  SNSEmailAlertTopic:
     Type: AWS::SNS::Topic
-    Condition: EnableEmailNotifications
     Properties:
-      TopicName: !Sub "${AWS::StackName}-email-alarm-notifications"
+      TopicName: !Sub "${AWS::StackName}-email-alart-notifications"
 
-  SNSEmailSubscription:
+  SNSEmailAlertSubscription:
     Type: AWS::SNS::Subscription
-    Condition: EnableEmailNotifications
+    Condition: EnableEmailAlertNotifications
     Properties:
       Protocol: email
-      TopicArn: !Ref SNSEmailAlarmTopic
+      TopicArn: !Ref SNSEmailAlertTopic
       Endpoint: !Ref AlertEmailAddress
 
   SQSObjectCreated:
