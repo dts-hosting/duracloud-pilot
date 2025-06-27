@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"duracloud/internal/accounts"
+	"duracloud/internal/db"
 	"duracloud/internal/notifications"
 	_ "embed"
 	"fmt"
@@ -54,10 +55,10 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		bucket := record.Change.NewImage["Bucket"].String()
-		object := record.Change.NewImage["Object"].String()
+		bucket := record.Change.NewImage[string(db.ChecksumTableBucketNameId)].String()
+		object := record.Change.NewImage[string(db.ChecksumTableObjectKeyId)].String()
 
-		checksumSuccess, exists := record.Change.NewImage["LastChecksumSuccess"]
+		checksumSuccess, exists := record.Change.NewImage[string(db.ChecksumTableStatusId)]
 		if !exists {
 			log.Printf("Checksum status field not found for %s/%s", bucket, object)
 			continue
@@ -72,7 +73,7 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 		log.Printf("Checksum failure detected: %s/%s", bucket, object)
 
 		errorMessage := "Unknown error"
-		if lastError, exists := record.Change.NewImage["LastChecksumMessage"]; exists {
+		if lastError, exists := record.Change.NewImage[string(db.ChecksumTableMessageId)]; exists {
 			errorMessage = lastError.String()
 		}
 

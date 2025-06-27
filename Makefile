@@ -51,8 +51,8 @@ docs-install: ## Install docs dependencies
 	@npm install && cd docs-src && npm install
 
 .PHONY: expire-ttl
-expire-ttl: ## Expire TTL for checksum verification (bucket=name object=key)
-	@./scripts/expire-ttl.sh $(stack) $(bucket) $(object)
+expire-ttl: ## Expire TTL for checksum verification (bucket=name file=key)
+	@./scripts/expire-ttl.sh $(stack) $(bucket) $(file)
 
 .PHONY: file-copy
 file-copy: ## Copy a file to a bucket (without prefixes)

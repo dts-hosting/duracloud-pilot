@@ -10,14 +10,21 @@ TABLE_NAME="${STACK}-checksum-scheduler-table"
 EXPIRED_TTL=$(date -d "1 day ago" +%s)
 
 if [ -n "$BUCKET" ] && [ -n "$OBJECT" ]; then
-    echo "Expiring TTL for item: $BUCKET/$OBJECT"
-    aws dynamodb update-item \
+    echo "Creating scheduler: $BUCKET/$OBJECT"
+    aws dynamodb put-item \
         --table-name "$TABLE_NAME" \
-        --key "{\"#bucket\":{\"S\":\"$BUCKET\"},\"#obj\":{\"S\":\"$OBJECT\"}}" \
-        --update-expression "SET #ttl = :expired_ttl" \
-        --expression-attribute-names '{"#bucket":"Bucket","#obj":"Object","#ttl":"TTL"}' \
-        --expression-attribute-values "{\":expired_ttl\":{\"N\":\"$EXPIRED_TTL\"}}" \
-        --return-values UPDATED_NEW
+        --item "{
+            \"BucketName\": {\"S\": \"$BUCKET\"},
+            \"ObjectKey\": {\"S\": \"$OBJECT\"},
+            \"NextChecksumDate\": {\"S\": \"$(date -d '1 day ago' --iso-8601=seconds)\"},
+            \"TTL\": {\"N\": \"$EXPIRED_TTL\"}
+        }" \
+        --return-values NONE
+else
+    echo "Usage: $0 [stack-name] <bucket-name> <object-key>"
+    echo "Example: $0 duracloud-lyrasis my-bucket path/to/file.txt"
+    exit 1
 fi
 
-echo "TTL expiration completed. Item should be processed by TTL within minutes but max 48 hours."
+echo "Item created/updated with expired TTL. DynamoDB will process it within ~minutes (max 48 hours)."
+echo "This will (eventually) trigger the checksum verification function."

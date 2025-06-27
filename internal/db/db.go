@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"crypto/rand"
+	"duracloud/internal/checksum"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -12,9 +13,19 @@ import (
 	"time"
 )
 
+// ChecksumTableId represents a string type identifier for checksum table field names
+type ChecksumTableId string
+
+const (
+	ChecksumTableBucketNameId ChecksumTableId = "BucketName"
+	ChecksumTableObjectKeyId  ChecksumTableId = "ObjectKey"
+	ChecksumTableMessageId    ChecksumTableId = "LastChecksumMessage"
+	ChecksumTableStatusId     ChecksumTableId = "LastChecksumSuccess"
+)
+
 type ChecksumRecord struct {
-	Bucket              string    `dynamodbav:"Bucket"`
-	Object              string    `dynamodbav:"Object"`
+	BucketName          string    `dynamodbav:"BucketName"`
+	ObjectKey           string    `dynamodbav:"ObjectKey"`
 	Checksum            string    `dynamodbav:"Checksum"`
 	LastChecksumDate    time.Time `dynamodbav:"LastChecksumDate"`
 	LastChecksumMessage string    `dynamodbav:"LastChecksumMessage"`
@@ -31,8 +42,8 @@ func DeleteChecksumRecord(
 	_, err := client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(table),
 		Key: map[string]types.AttributeValue{
-			"Bucket": &types.AttributeValueMemberS{Value: record.Bucket},
-			"Object": &types.AttributeValueMemberS{Value: record.Object},
+			"BucketName": &types.AttributeValueMemberS{Value: record.BucketName},
+			"ObjectKey":  &types.AttributeValueMemberS{Value: record.ObjectKey},
 		},
 	})
 	return err
@@ -42,14 +53,14 @@ func GetChecksumRecord(
 	ctx context.Context,
 	client *dynamodb.Client,
 	checksumTable string,
-	record ChecksumRecord,
+	object checksum.S3Object,
 ) (ChecksumRecord, error) {
 	checksumRecord := ChecksumRecord{}
 	result, err := client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(checksumTable),
 		Key: map[string]types.AttributeValue{
-			"Bucket": &types.AttributeValueMemberS{Value: record.Bucket},
-			"Object": &types.AttributeValueMemberS{Value: record.Object},
+			"BucketName": &types.AttributeValueMemberS{Value: object.Bucket},
+			"ObjectKey":  &types.AttributeValueMemberS{Value: object.Key},
 		},
 	})
 	if err != nil {
@@ -103,8 +114,8 @@ func PutChecksumRecord(
 	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(checksumTable),
 		Item: map[string]types.AttributeValue{
-			"Bucket":              &types.AttributeValueMemberS{Value: record.Bucket},
-			"Object":              &types.AttributeValueMemberS{Value: record.Object},
+			"BucketName":          &types.AttributeValueMemberS{Value: record.BucketName},
+			"ObjectKey":           &types.AttributeValueMemberS{Value: record.ObjectKey},
 			"Checksum":            &types.AttributeValueMemberS{Value: record.Checksum},
 			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate.Format(time.RFC3339)},
 			"LastChecksumMessage": &types.AttributeValueMemberS{Value: record.LastChecksumMessage},
@@ -124,8 +135,8 @@ func ScheduleNextVerification(
 	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(schedulerTable),
 		Item: map[string]types.AttributeValue{
-			"Bucket":           &types.AttributeValueMemberS{Value: record.Bucket},
-			"Object":           &types.AttributeValueMemberS{Value: record.Object},
+			"BucketName":       &types.AttributeValueMemberS{Value: record.BucketName},
+			"ObjectKey":        &types.AttributeValueMemberS{Value: record.ObjectKey},
 			"NextChecksumDate": &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
 			"TTL":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", record.NextChecksumDate.Unix())},
 		},

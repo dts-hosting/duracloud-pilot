@@ -30,7 +30,7 @@ func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRetryer(func() aws.Retryer {
 			return retry.AddWithMaxAttempts(
-				retry.NewStandard(), 10)
+				retry.NewStandard(), 5)
 		}),
 	)
 	if err != nil {
@@ -60,14 +60,12 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 			continue
 		}
 
-		bucketName := parsedEvent.BucketName()
-		objectKey := parsedEvent.ObjectKey()
-		obj := checksum.NewS3Object(bucketName, objectKey)
-		log.Printf("Processing upload event for bucket name: %s, object key: %s", bucketName, objectKey)
+		obj := checksum.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
+		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
 			// only use for retryable errors
-			log.Printf("Failed to process uploaded object %s/%s: %v", bucketName, objectKey, err)
+			log.Printf("Failed to process uploaded object %s/%s: %v", obj.Bucket, obj.Key, err)
 			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: parsedEvent.MessageId,
 			})
@@ -97,8 +95,8 @@ func processUploadedObject(
 
 	// Optimistic outlook for our adventurer checksum record
 	checksumRecord := db.ChecksumRecord{
-		Bucket:              obj.Bucket,
-		Object:              obj.Key,
+		BucketName:          obj.Bucket,
+		ObjectKey:           obj.Key,
 		Checksum:            hash, // "" if failed
 		LastChecksumDate:    time.Now(),
 		LastChecksumMessage: "ok",

@@ -28,7 +28,7 @@ func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRetryer(func() aws.Retryer {
 			return retry.AddWithMaxAttempts(
-				retry.NewStandard(), 10)
+				retry.NewStandard(), 5)
 		}),
 	)
 	if err != nil {
@@ -57,14 +57,12 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 			continue
 		}
 
-		bucketName := parsedEvent.BucketName()
-		objectKey := parsedEvent.ObjectKey()
-		obj := checksum.NewS3Object(bucketName, objectKey)
-		log.Printf("Processing delete event for bucket name: %s, object key: %s", bucketName, objectKey)
+		obj := checksum.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
+		log.Printf("Processing delete event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processDeletedObject(ctx, dynamodbClient, obj); err != nil {
 			// only use for retryable errors
-			log.Printf("Failed to process deleted object %s/%s: %v", bucketName, objectKey, err)
+			log.Printf("Failed to process deleted object %s/%s: %v", obj.Bucket, obj.Key, err)
 			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: parsedEvent.MessageId,
 			})
@@ -80,8 +78,8 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 
 func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
 	checksumRecord := db.ChecksumRecord{
-		Bucket: obj.Bucket,
-		Object: obj.Key,
+		BucketName: obj.Bucket,
+		ObjectKey:  obj.Key,
 	}
 
 	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)

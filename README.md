@@ -57,18 +57,19 @@ make delete stack=duracloud-lyrasis
 ```bash
 # trigger: bucket creation function
 make file-copy file=files/create-buckets.txt bucket=duracloud-lyrasis-bucket-requested
+make bucket action=list # list buckets, should shortly have the newly created ones
 
 # trigger: file uploaded function
 make file-copy file=files/upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
 
-# trigger: file deleted function
-make file-delete file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
-
 # trigger: checksum verification
-# TODO: expire scheduled item by setting - 1 day ttl
+make expire-ttl stack=duracloud-lyrasis file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
 
 # trigger: checksum failure notification
-# TODO: set checksum status false (message = "test") for an item
+# TODO: set checksum status false (message = "forcibly induced error") for an item
+
+# trigger: file deleted function
+make file-delete file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
 ```
 
 To view logs:

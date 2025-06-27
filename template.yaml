@@ -529,14 +529,14 @@ Resources:
       TableName: !Sub "${AWS::StackName}-checksum-table"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: Bucket
+        - AttributeName: BucketName
           AttributeType: S
-        - AttributeName: Object
+        - AttributeName: ObjectKey
           AttributeType: S
       KeySchema:
-        - AttributeName: Bucket
+        - AttributeName: BucketName
           KeyType: HASH
-        - AttributeName: Object
+        - AttributeName: ObjectKey
           KeyType: RANGE
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
@@ -549,14 +549,14 @@ Resources:
       TableName: !Sub "${AWS::StackName}-checksum-scheduler-table"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: Bucket
+        - AttributeName: BucketName
           AttributeType: S
-        - AttributeName: Object
+        - AttributeName: ObjectKey
           AttributeType: S
       KeySchema:
-        - AttributeName: Bucket
+        - AttributeName: BucketName
           KeyType: HASH
-        - AttributeName: Object
+        - AttributeName: ObjectKey
           KeyType: RANGE
       TimeToLiveSpecification:
         AttributeName: TTL

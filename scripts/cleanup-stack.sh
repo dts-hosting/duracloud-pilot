@@ -26,10 +26,9 @@ clear_dynamodb_table() {
 
     aws dynamodb scan \
         --table-name "$TABLE_NAME" \
-        --projection-expression "#bucket, #obj" \
-        --expression-attribute-names '{"#bucket":"Bucket","#obj":"Object"}' \
+        --projection-expression "BucketName, ObjectKey" \
         --max-items 1000 \
-        | jq -c '.Items[] | {DeleteRequest: {Key: {Bucket: .Bucket, Object: .Object}}}' \
+        | jq -c '.Items[] | {DeleteRequest: {Key: {BucketName: .BucketName, ObjectKey: .ObjectKey}}}' \
         | split -l 25 - "$temp_dir/items_"
 
     # Process each batch file
