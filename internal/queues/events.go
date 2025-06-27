@@ -41,6 +41,11 @@ func (e *S3EventBridgeEvent) ObjectKey() string {
 	return e.Detail.Object.Key
 }
 
+// IsIgnoreFilesBucket checks if the bucket contains ignorable files
+func (e *S3EventBridgeEvent) IsIgnoreFilesBucket() bool {
+	return buckets.IsIgnoreFilesBucket(e.BucketName())
+}
+
 // IsObjectCreated checks if the event is an object creation event
 func (e *S3EventBridgeEvent) IsObjectCreated() bool {
 	return e.DetailType == "Object Created"

@@ -44,19 +44,40 @@ make deploy stack=duracloud-lyrasis
 # get the support user access key and secret
 make creds stack=duracloud-lyrasis
 
-# trigger: test bucket creation
-make copy file=files/create-buckets.txt bucket=duracloud-lyrasis-bucket-requested
-
-# output logs (optional: interval=30m, default is 5m)
-make logs func=BucketRequestedFunction stack=duracloud-lyrasis
-
 # destroy
-make bucket action=empty bucket=duracloud-lyrasis-bucket-requested
+make cleanup stack=duracloud-lyrasis
 make delete stack=duracloud-lyrasis
 ```
 
 - Setting `stack` uniquely allows for multiple deployments to the same account.
 - Created resources are prefixed with the `stack` name.
+
+## Workflow testing
+
+```bash
+# trigger: bucket creation function
+make file-copy file=files/create-buckets.txt bucket=duracloud-lyrasis-bucket-requested
+make bucket action=list # list buckets, should shortly have the newly created ones
+
+# trigger: file uploaded function
+make file-copy file=files/upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
+
+# trigger: checksum verification
+make expire-ttl stack=duracloud-lyrasis file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
+
+# trigger: checksum failure notification
+# TODO: set checksum status false (message = "forcibly induced error") for an item
+
+# trigger: file deleted function
+make file-delete file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
+```
+
+To view logs:
+
+```bash
+# output logs (optional: interval=30m, default is 5m)
+make logs func=BucketRequestedFunction stack=duracloud-lyrasis
+```
 
 ## Utility tasks
 
@@ -64,15 +85,9 @@ The `make bucket` task can be used to create, clear and delete buckets:
 
 ```bash
 make bucket action=list
-make bucket action=create bucket=duracloud-pilot-bucket1
-make bucket action=empty bucket=duracloud-pilot-bucket1
-make bucket action=delete bucket=duracloud-pilot-bucket1
-```
-
-There is a command to clear out non-managed resources:
-
-```bash
-make cleanup stack=duracloud-lyrasis
+make bucket action=create bucket=duracloud-lyrasis-tmp
+make bucket action=empty bucket=duracloud-lyrasis-tmp
+make bucket action=delete bucket=duracloud-lyrasis-tmp
 ```
 
 The `make invoke` task can be used to run functions locally:

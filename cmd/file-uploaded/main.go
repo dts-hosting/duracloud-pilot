@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"duracloud/internal/checksum"
+	"duracloud/internal/db"
 	"duracloud/internal/queues"
 	"encoding/json"
 	"fmt"
@@ -29,7 +30,7 @@ func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRetryer(func() aws.Retryer {
 			return retry.AddWithMaxAttempts(
-				retry.NewStandard(), 10)
+				retry.NewStandard(), 5)
 		}),
 	)
 	if err != nil {
@@ -40,10 +41,6 @@ func init() {
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
 	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
-
-	// tmp
-	fmt.Println(checksumTable)
-	fmt.Println(schedulerTable)
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
@@ -59,23 +56,23 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
 	for _, parsedEvent := range parsedEvents {
-		if !parsedEvent.IsObjectCreated() || parsedEvent.IsRestrictedBucket() {
+		if !parsedEvent.IsObjectCreated() || parsedEvent.IsIgnoreFilesBucket() {
 			continue
 		}
 
-		bucketName := parsedEvent.BucketName()
-		objectKey := parsedEvent.ObjectKey()
-		obj := checksum.NewS3Object(bucketName, objectKey)
-		log.Printf("Processing upload event for bucket name: %s, object key: %s", bucketName, objectKey)
+		obj := checksum.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
+		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
 			// only use for retryable errors
-			log.Printf("Failed to process uploaded object %s/%s: %v", bucketName, objectKey, err)
+			log.Printf("Failed to process uploaded object %s/%s: %v", obj.Bucket, obj.Key, err)
 			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: parsedEvent.MessageId,
 			})
 		}
 	}
+
+	log.Printf("Finished processing upload events. Failed events: %d", len(failedEvents))
 
 	return events.SQSEventResponse{
 		BatchItemFailures: failedEvents,
@@ -88,10 +85,40 @@ func processUploadedObject(
 	dynamodbClient *dynamodb.Client,
 	obj checksum.S3Object,
 ) error {
-	// TODO: continue implementation ...
-	// - Calc checksum
-	// - Not ok: LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
-	// - ok: LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
+	nextScheduledTime, err := db.GetNextScheduledTime()
+	if err != nil {
+		return err
+	}
+
+	calc := checksum.NewS3Calculator(s3Client)
+	hash, err := calc.CalculateChecksum(ctx, obj)
+
+	// Optimistic outlook for our adventurer checksum record
+	checksumRecord := db.ChecksumRecord{
+		BucketName:          obj.Bucket,
+		ObjectKey:           obj.Key,
+		Checksum:            hash, // "" if failed
+		LastChecksumDate:    time.Now(),
+		LastChecksumMessage: "ok",
+		LastChecksumSuccess: true,
+		NextChecksumDate:    nextScheduledTime,
+	}
+
+	if err != nil {
+		log.Printf("Failed to calculate checksum: %v", err)
+		checksumRecord.LastChecksumMessage = err.Error()
+		checksumRecord.LastChecksumSuccess = false
+	} else {
+		err = db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	if err != nil {
+		return err
+	}
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil

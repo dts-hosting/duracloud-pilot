@@ -14,7 +14,7 @@ INTERVAL=${3:-5m}
 
 echo "Looking for log group for function $FUNCTION_NAME"
 
-GROUP=$(saw groups | grep "/aws/lambda/$STACK_NAME-$FUNCTION_NAME-")
+GROUP=$(saw groups | grep "/aws/lambda/$STACK_NAME-$FUNCTION_NAME")
 
 if [ -z "$GROUP" ]; then
   echo "No log group found for function: $FUNCTION_NAME"

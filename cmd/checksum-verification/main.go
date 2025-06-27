@@ -27,7 +27,7 @@ func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRetryer(func() aws.Retryer {
 			return retry.AddWithMaxAttempts(
-				retry.NewStandard(), 10)
+				retry.NewStandard(), 5)
 		}),
 	)
 	if err != nil {
@@ -49,35 +49,33 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		bucket, object, err := extractBucketAndObject(record)
+		obj, err := extractBucketAndObject(record)
 		if err != nil {
-			return fmt.Errorf("failed to extract bucket/object: %w", err)
+			log.Printf("failed to extract bucket/object: %s", err.Error())
+			continue
 		}
 
-		log.Printf("Starting checksum verification for: %s %s", bucket, object)
+		log.Printf("Starting checksum verification for: %s/%s", obj.Bucket, obj.Key)
 
 		//currentTime := time.Now()
 		//nextScheduledTime := db.GetNextScheduledTime()
 
-		checksumRecord := db.ChecksumRecord{
-			Bucket: bucket,
-			Object: object,
-		}
-
-		checksumRecord, err = db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+		checksumRecord, err := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
 		if err != nil {
 			// TODO update checksumRecord for failure and PutChecksumRecord (continue)
-			return fmt.Errorf("failed to get checksum record: %w", err)
+			log.Printf("failed to get checksum record: %s", err.Error())
+			continue
 		}
 
-		obj := checksum.NewS3Object(bucket, object)
 		calc := checksum.NewS3Calculator(s3Client)
 		checksumResult, err := calc.CalculateChecksum(ctx, obj)
 		if err != nil {
 			// TODO update checksumRecord for failure and PutChecksumRecord (continue)
-			return fmt.Errorf("failed to calculate checksum: %w", err)
+			log.Printf("failed to calculate checksum: %s", err.Error())
+			continue
 		}
 
+		// TODO: remove these temporary logging statements
 		log.Printf("Calculated checksum: %s", checksumResult)
 		log.Printf("Checksum record: %v", checksumRecord)
 
@@ -90,18 +88,18 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 	return nil
 }
 
-func extractBucketAndObject(record events.DynamoDBEventRecord) (string, string, error) {
-	bucketAttr, exists := record.Change.OldImage["Bucket"]
+func extractBucketAndObject(record events.DynamoDBEventRecord) (checksum.S3Object, error) {
+	bucket, exists := record.Change.OldImage[string(db.ChecksumTableBucketNameId)]
 	if !exists {
-		return "", "", fmt.Errorf("missing Bucket attribute")
+		return checksum.S3Object{}, fmt.Errorf("missing bucket name attribute")
 	}
 
-	objectAttr, exists := record.Change.OldImage["Object"]
+	object, exists := record.Change.OldImage[string(db.ChecksumTableObjectKeyId)]
 	if !exists {
-		return "", "", fmt.Errorf("missing Object attribute")
+		return checksum.S3Object{}, fmt.Errorf("missing object key attribute")
 	}
 
-	return bucketAttr.String(), objectAttr.String(), nil
+	return checksum.S3Object{Bucket: bucket.String(), Key: object.String()}, nil
 }
 
 func isTTLExpiry(record events.DynamoDBEventRecord) bool {
@@ -110,6 +108,11 @@ func isTTLExpiry(record events.DynamoDBEventRecord) bool {
 		record.UserIdentity.Type == "Service" &&
 		record.UserIdentity.PrincipalID == "dynamodb.amazonaws.com"
 }
+
+//func processChecksumVerification(ctx context.Context, s3Client *s3.Client, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
+//	// TODO
+//	return nil
+//}
 
 func main() {
 	lambda.Start(handler)
