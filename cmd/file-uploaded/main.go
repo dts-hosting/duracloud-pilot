@@ -90,38 +90,37 @@ func processUploadedObject(
 	obj checksum.S3Object,
 ) error {
 	calc := checksum.NewS3Calculator(s3Client)
-	hash, err := calc.CalculateChecksum(ctx, obj)
+	hash, _ := calc.CalculateChecksum(ctx, obj)
 	nextScheduledTime, err := db.GetNextScheduledTime()
 	nowTime := time.Now()
 	if err != nil {
-		log.Printf("Failed to get a scheduled time %v, err")
+		log.Printf("Failed to get a scheduled time %v", err)
 	}
 
 	if err != nil {
-		log.Printf("Failed to get scheduled time %v, err")
+		log.Printf("Failed to get scheduled time %v", err)
 	}
 
-	checksumRecord := db.ChecksumRecord{}
+	var checksumRecord db.ChecksumRecord
 	if err != nil {
 		log.Printf("Failed to calculate checksum: %v", err)
 		checksumRecord = db.ChecksumRecord{
-			obj.Bucket,
-			obj.Key,
-			hash,
-			nowTime,
-			"calc fail",
-			false,
-			nextScheduledTime,
+			Bucket:              obj.Bucket,
+			Object:              obj.Key,
+			Checksum:            hash,
+			LastChecksumDate:    nowTime,
+			LastChecksumMessage: "calc fail",
+			NextChecksumDate:    nextScheduledTime,
 		}
 	} else {
 		checksumRecord = db.ChecksumRecord{
-			obj.Bucket,
-			obj.Key,
-			hash,
-			nowTime,
-			"ok",
-			true,
-			nextScheduledTime,
+			Bucket:              obj.Bucket,
+			Object:              obj.Key,
+			Checksum:            hash,
+			LastChecksumDate:    nowTime,
+			LastChecksumMessage: "ok",
+			LastChecksumSuccess: true,
+			NextChecksumDate:    nextScheduledTime,
 		}
 
 		err := db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
@@ -130,7 +129,7 @@ func processUploadedObject(
 		}
 
 	}
-		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 	if err != nil {
 		log.Printf("Failed to store checksum: %v", err)
 	}

@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"duracloud/internal/db"
 	"duracloud/internal/checksum"
+	"duracloud/internal/db"
 	"duracloud/internal/queues"
 	"encoding/json"
 	"fmt"
@@ -85,7 +85,7 @@ func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, 
 	// - use db.DeleteItem to make delete calls to checksum and scheduler tables
 	checksumRecord := db.ChecksumRecord{
 		Bucket: obj.Bucket,
-		Object:	obj.Key,
+		Object: obj.Key,
 	}
 
 	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
