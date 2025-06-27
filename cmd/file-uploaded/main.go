@@ -41,10 +41,6 @@ func init() {
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
 	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
-
-	// tmp
-	fmt.Println(checksumTable)
-	fmt.Println(schedulerTable)
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
@@ -60,7 +56,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
 	for _, parsedEvent := range parsedEvents {
-		if !parsedEvent.IsObjectCreated() || parsedEvent.IsRestrictedBucket() {
+		if !parsedEvent.IsObjectCreated() || parsedEvent.IsIgnoreFilesBucket() {
 			continue
 		}
 
@@ -78,6 +74,8 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		}
 	}
 
+	log.Printf("Finished processing upload events. Failed events: %d", len(failedEvents))
+
 	return events.SQSEventResponse{
 		BatchItemFailures: failedEvents,
 	}, nil
@@ -89,49 +87,39 @@ func processUploadedObject(
 	dynamodbClient *dynamodb.Client,
 	obj checksum.S3Object,
 ) error {
-	calc := checksum.NewS3Calculator(s3Client)
-	hash, _ := calc.CalculateChecksum(ctx, obj)
 	nextScheduledTime, err := db.GetNextScheduledTime()
-	nowTime := time.Now()
 	if err != nil {
-		log.Printf("Failed to get a scheduled time %v", err)
+		return err
 	}
 
-	if err != nil {
-		log.Printf("Failed to get scheduled time %v", err)
+	calc := checksum.NewS3Calculator(s3Client)
+	hash, err := calc.CalculateChecksum(ctx, obj)
+
+	// Optimistic outlook for our adventurer checksum record
+	checksumRecord := db.ChecksumRecord{
+		Bucket:              obj.Bucket,
+		Object:              obj.Key,
+		Checksum:            hash, // "" if failed
+		LastChecksumDate:    time.Now(),
+		LastChecksumMessage: "ok",
+		LastChecksumSuccess: true,
+		NextChecksumDate:    nextScheduledTime,
 	}
 
-	var checksumRecord db.ChecksumRecord
 	if err != nil {
 		log.Printf("Failed to calculate checksum: %v", err)
-		checksumRecord = db.ChecksumRecord{
-			Bucket:              obj.Bucket,
-			Object:              obj.Key,
-			Checksum:            hash,
-			LastChecksumDate:    nowTime,
-			LastChecksumMessage: "calc fail",
-			NextChecksumDate:    nextScheduledTime,
-		}
+		checksumRecord.LastChecksumMessage = err.Error()
+		checksumRecord.LastChecksumSuccess = false
 	} else {
-		checksumRecord = db.ChecksumRecord{
-			Bucket:              obj.Bucket,
-			Object:              obj.Key,
-			Checksum:            hash,
-			LastChecksumDate:    nowTime,
-			LastChecksumMessage: "ok",
-			LastChecksumSuccess: true,
-			NextChecksumDate:    nextScheduledTime,
-		}
-
-		err := db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
+		err = db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
 		if err != nil {
-			log.Printf("Failed to schedule next verification: %v", err)
+			return err
 		}
-
 	}
+
 	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 	if err != nil {
-		log.Printf("Failed to store checksum: %v", err)
+		return err
 	}
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts

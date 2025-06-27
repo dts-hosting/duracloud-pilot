@@ -25,10 +25,6 @@ build: ## Build the project (images, artifacts, etc.)
 cleanup: ## Cleanup bucket resources for a stack
 	@./scripts/cleanup-stack.sh $(stack)
 
-.PHONY: copy
-copy: ## Copy a file to a bucket (without prefixes)
-	@aws s3 cp $(file) s3://$(bucket)/
-
 .PHONY: creds
 creds: ## Output the test user access key and secret
 	@aws ssm get-parameter --name "/$(stack)/iam/test/access-key-id"
@@ -53,6 +49,18 @@ docs-dev: ## Start the docs dev server
 .PHONY: docs-install
 docs-install: ## Install docs dependencies
 	@npm install && cd docs-src && npm install
+
+.PHONY: expire-ttl
+expire-ttl: ## Expire TTL for checksum verification (bucket=name object=key)
+	@./scripts/expire-ttl.sh $(stack) $(bucket) $(object)
+
+.PHONY: file-copy
+file-copy: ## Copy a file to a bucket (without prefixes)
+	@aws s3 cp $(file) s3://$(bucket)/
+
+.PHONY: file-delete
+file-delete: ## Delete a file from a bucket (without prefixes)
+	@aws s3 rm s3://$(bucket)/$(file)
 
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally

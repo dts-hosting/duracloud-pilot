@@ -38,10 +38,6 @@ func init() {
 	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
-
-	// tmp
-	fmt.Println(checksumTable)
-	fmt.Println(schedulerTable)
 }
 
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
@@ -57,7 +53,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
 	for _, parsedEvent := range parsedEvents {
-		if !parsedEvent.IsObjectDeleted() || parsedEvent.IsRestrictedBucket() {
+		if !parsedEvent.IsObjectDeleted() || parsedEvent.IsIgnoreFilesBucket() {
 			continue
 		}
 
@@ -75,14 +71,14 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		}
 	}
 
+	log.Printf("Finished processing delete events. Failed events: %d", len(failedEvents))
+
 	return events.SQSEventResponse{
 		BatchItemFailures: failedEvents,
 	}, nil
 }
 
 func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
-	// TODO: continue implementation ...
-	// - use db.DeleteItem to make delete calls to checksum and scheduler tables
 	checksumRecord := db.ChecksumRecord{
 		Bucket: obj.Bucket,
 		Object: obj.Key,
@@ -90,7 +86,12 @@ func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, 
 
 	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 	if err != nil {
-		log.Printf("Failed to delete checksum from table: %v", err)
+		return err
+	}
+
+	err = db.DeleteChecksumRecord(ctx, dynamodbClient, schedulerTable, checksumRecord)
+	if err != nil {
+		return err
 	}
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
