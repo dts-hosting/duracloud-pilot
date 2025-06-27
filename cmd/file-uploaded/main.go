@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"duracloud/internal/checksum"
+	"duracloud/internal/db"
 	"duracloud/internal/queues"
 	"encoding/json"
 	"fmt"
@@ -88,10 +89,50 @@ func processUploadedObject(
 	dynamodbClient *dynamodb.Client,
 	obj checksum.S3Object,
 ) error {
-	// TODO: continue implementation ...
-	// - Calc checksum
-	// - Not ok: LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
-	// - ok: LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
+	calc := checksum.NewS3Calculator(s3Client)
+	hash, err := calc.CalculateChecksum(ctx, obj)
+	nextScheduledTime, err := db.GetNextScheduledTime()
+	nowTime := time.Now()
+	if err != nil {
+		log.Printf("Failed to get a scheduled time %v, err")
+	}
+
+	if err != nil {
+		log.Printf("Failed to get scheduled time %v, err")
+	}
+
+	if err != nil {
+		log.Printf("Failed to calculate checksum: %v", err)
+		checksumRecord := db.ChecksumRecord{
+			obj.Bucket,
+			obj.Key,
+			hash,
+			nowTime,
+			"calc fail",
+			false,
+			nextScheduledTime,
+		}
+
+		err := db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+		if err != nil {
+			log.Printf("Failed to store checksum: %v", err)
+		}
+		return err
+	}
+	checksumRecord := db.ChecksumRecord{
+		obj.Bucket,
+		obj.Key,
+		hash,
+		nowTime,
+		"ok",
+		true,
+		nextScheduledTime,
+	}
+
+	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	if err != nil {
+		log.Printf("Failed to store checksum: %v", err)
+	}
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil

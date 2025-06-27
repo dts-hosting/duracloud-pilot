@@ -700,6 +700,15 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
       SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-bucket-requested"
 
+  LambdaFileUploadedInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt FileUploadedFunction.Arn
+      Principal: events.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-file-uploaded"
+
   LambdaChecksumExporterInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
