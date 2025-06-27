@@ -101,9 +101,10 @@ func processUploadedObject(
 		log.Printf("Failed to get scheduled time %v, err")
 	}
 
+	checksumRecord := db.ChecksumRecord{}
 	if err != nil {
 		log.Printf("Failed to calculate checksum: %v", err)
-		checksumRecord := db.ChecksumRecord{
+		checksumRecord = db.ChecksumRecord{
 			obj.Bucket,
 			obj.Key,
 			hash,
@@ -112,24 +113,18 @@ func processUploadedObject(
 			false,
 			nextScheduledTime,
 		}
-
-		err := db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
-		if err != nil {
-			log.Printf("Failed to store checksum: %v", err)
+	} else {
+		checksumRecord = db.ChecksumRecord{
+			obj.Bucket,
+			obj.Key,
+			hash,
+			nowTime,
+			"ok",
+			true,
+			nextScheduledTime,
 		}
-		return err
 	}
-	checksumRecord := db.ChecksumRecord{
-		obj.Bucket,
-		obj.Key,
-		hash,
-		nowTime,
-		"ok",
-		true,
-		nextScheduledTime,
-	}
-
-	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 	if err != nil {
 		log.Printf("Failed to store checksum: %v", err)
 	}
