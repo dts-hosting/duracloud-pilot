@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"duracloud/internal/db"
 	"duracloud/internal/checksum"
 	"duracloud/internal/queues"
 	"encoding/json"
@@ -82,6 +83,15 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
 	// TODO: continue implementation ...
 	// - use db.DeleteItem to make delete calls to checksum and scheduler tables
+	checksumRecord := db.ChecksumRecord{
+		Bucket: obj.Bucket,
+		Object:	obj.Key,
+	}
+
+	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	if err != nil {
+		log.Printf("Failed to delete checksum from table: %v", err)
+	}
 
 	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil
