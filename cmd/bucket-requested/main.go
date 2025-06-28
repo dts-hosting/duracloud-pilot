@@ -5,7 +5,6 @@ import (
 	"duracloud/internal/accounts"
 	"duracloud/internal/buckets"
 	"encoding/json"
-	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -71,7 +70,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	if err != nil {
 		bucketsStatus[buckets.BucketRequestedFileErrorKey] = err.Error()
 		_ = buckets.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
-		log.Fatalf("Error retrieving buckets list: %v", err)
+		log.Fatalf("Could not retrieve buckets list: %v", err)
 	}
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
@@ -99,7 +98,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	err = buckets.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
 	if err != nil {
-		log.Printf("Error writing bucket status to managed bucket: %v", err)
+		log.Fatalf("Could not write bucket status to managed bucket: %v", err)
 	}
 
 	return nil
@@ -274,7 +273,7 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 		}
 	}
 
-	localStatus[fullBucketName] = fmt.Sprintf("Created bucket %s", fullBucketName)
+	localStatus[fullBucketName] = "Bucket created successfully"
 	bucket.ResultChan <- localStatus
 }
 

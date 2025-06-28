@@ -6,7 +6,6 @@ import (
 	"duracloud/internal/db"
 	"duracloud/internal/queues"
 	"encoding/json"
-	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -46,7 +45,8 @@ func init() {
 func handler(ctx context.Context, event json.RawMessage) (events.SQSEventResponse, error) {
 	var sqsEvent events.SQSEvent
 	if err := json.Unmarshal(event, &sqsEvent); err != nil {
-		return events.SQSEventResponse{}, fmt.Errorf("failed to parse SQS event: %v", err)
+		log.Printf("Failed to parse SQS event: %v", err)
+		return events.SQSEventResponse{}, nil
 	}
 
 	sqsEventWrapper := queues.SQSEventWrapper{
@@ -64,8 +64,9 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
-			// only use for retryable errors
+			// Only retry if the uploaded file exists
 			log.Printf("Failed to process uploaded object %s/%s: %v", obj.Bucket, obj.Key, err)
+			// TODO: check if the object actually exists, if it does add to failed and notify (expected but failed)
 			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
 				ItemIdentifier: parsedEvent.MessageId,
 			})

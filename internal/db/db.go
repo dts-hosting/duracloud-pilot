@@ -53,27 +53,27 @@ func GetChecksumRecord(
 	ctx context.Context,
 	client *dynamodb.Client,
 	checksumTable string,
-	object checksum.S3Object,
+	obj checksum.S3Object,
 ) (ChecksumRecord, error) {
-	checksumRecord := ChecksumRecord{}
 	result, err := client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(checksumTable),
 		Key: map[string]types.AttributeValue{
-			"BucketName": &types.AttributeValueMemberS{Value: object.Bucket},
-			"ObjectKey":  &types.AttributeValueMemberS{Value: object.Key},
+			"BucketName": &types.AttributeValueMemberS{Value: obj.Bucket},
+			"ObjectKey":  &types.AttributeValueMemberS{Value: obj.Key},
 		},
 	})
 	if err != nil {
-		return checksumRecord, err
+		return ChecksumRecord{}, err
 	}
 
+	checksumRecord := ChecksumRecord{}
 	if result.Item == nil {
-		return ChecksumRecord{}, fmt.Errorf("checksum record not found")
+		return ChecksumRecord{}, ChecksumRecordNotFoundError(obj.Bucket, obj.Key)
 	}
 
 	err = attributevalue.UnmarshalMap(result.Item, &checksumRecord)
 	if err != nil {
-		return ChecksumRecord{}, fmt.Errorf("failed to unmarshal checksum record: %v", err)
+		return ChecksumRecord{}, UnmarshallingChecksumError(err)
 	}
 
 	return checksumRecord, nil
@@ -84,17 +84,17 @@ func GetNextScheduledTime() (time.Time, error) {
 
 	jitterDays, err := rand.Int(rand.Reader, big.NewInt(30))
 	if err != nil {
-		return baseTime, fmt.Errorf("failed to generate day jitter: %v", err)
+		return baseTime, JitterGenerationError("day", err)
 	}
 
 	jitterHours, err := rand.Int(rand.Reader, big.NewInt(24))
 	if err != nil {
-		return baseTime, fmt.Errorf("failed to generate hour jitter: %v", err)
+		return baseTime, JitterGenerationError("hour", err)
 	}
 
 	jitterMinutes, err := rand.Int(rand.Reader, big.NewInt(60))
 	if err != nil {
-		return baseTime, fmt.Errorf("failed to generate minute jitter: %v", err)
+		return baseTime, JitterGenerationError("minute", err)
 	}
 
 	scheduledTime := baseTime.

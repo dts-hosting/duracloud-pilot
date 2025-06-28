@@ -73,9 +73,9 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj S3Object) (str
 	})
 	if err != nil {
 		if isS3NotFound(err) {
-			return "", fmt.Errorf("object not found: %s", obj.URI())
+			return "", ObjectNotFoundError(obj.URI())
 		}
-		return "", fmt.Errorf("failed to get object metadata for %s: %w", obj.URI(), err)
+		return "", MetadataNotRetrievedError(obj.URI(), err)
 	}
 
 	var fileSize int64
@@ -84,9 +84,7 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj S3Object) (str
 	}
 
 	if fileSize > MaxFileSize {
-		return "", fmt.Errorf("file too large: %s is %d bytes (%.2f GB), maximum allowed is %d bytes (%.2f GB)",
-			obj.URI(), fileSize, float64(fileSize)/(1024*1024*1024),
-			MaxFileSize, float64(MaxFileSize)/(1024*1024*1024))
+		return "", MaxFileSizeExceededError(obj.URI(), fileSize)
 	}
 
 	log.Printf("Starting checksum calculation for %s - Size: %d bytes (%.2f MB)",
@@ -99,9 +97,9 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj S3Object) (str
 	})
 	if err != nil {
 		if isS3NotFound(err) {
-			return "", fmt.Errorf("object not found: %s", obj.URI())
+			return "", ObjectNotFoundError(obj.URI())
 		}
-		return "", fmt.Errorf("failed to get object content for %s: %w", obj.URI(), err)
+		return "", ObjectNotRetrievedError(obj.URI(), err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -119,13 +117,12 @@ func (c *S3Calculator) streamAndHash(reader io.Reader, uri string, expectedSize 
 
 	totalBytes, err := io.Copy(hashWriter, reader)
 	if err != nil {
-		return "", fmt.Errorf("failed to read from stream for %s: %w", uri, err)
+		return "", ReadingFromStreamError(uri, err)
 	}
 
 	// Verify we read the expected amount
 	if totalBytes != expectedSize {
-		return "", fmt.Errorf("size mismatch for %s: expected %d bytes, read %d bytes",
-			uri, expectedSize, totalBytes)
+		return "", BytesCountDoesNotMatchError(uri, expectedSize, totalBytes)
 	}
 
 	checksum := fmt.Sprintf("%x", hashWriter.Sum(nil))
