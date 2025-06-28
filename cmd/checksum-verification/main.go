@@ -55,34 +55,11 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		log.Printf("Starting checksum verification for: %s/%s", obj.Bucket, obj.Key)
-
-		//currentTime := time.Now()
-		//nextScheduledTime := db.GetNextScheduledTime()
-
-		checksumRecord, err := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
+		err = processChecksumVerification(ctx, s3Client, dynamodbClient, obj, checksumTable, schedulerTable)
 		if err != nil {
-			// TODO update checksumRecord for failure and PutChecksumRecord (continue)
-			log.Printf("failed to get checksum record: %s", err.Error())
+			log.Printf("failed to process checksum verification: %s", err.Error())
 			continue
 		}
-
-		calc := checksum.NewS3Calculator(s3Client)
-		checksumResult, err := calc.CalculateChecksum(ctx, obj)
-		if err != nil {
-			// TODO update checksumRecord for failure and PutChecksumRecord (continue)
-			log.Printf("failed to calculate checksum: %s", err.Error())
-			continue
-		}
-
-		// TODO: remove these temporary logging statements
-		log.Printf("Calculated checksum: %s", checksumResult)
-		log.Printf("Checksum record: %v", checksumRecord)
-
-		// TODO: continue implementation ...
-		// - Compare with checksumResult with checkSumRecord.Checksum
-		// - Not ok: update LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
-		// - ok: update LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
 	}
 
 	return nil
@@ -109,10 +86,43 @@ func isTTLExpiry(record events.DynamoDBEventRecord) bool {
 		record.UserIdentity.PrincipalID == "dynamodb.amazonaws.com"
 }
 
-//func processChecksumVerification(ctx context.Context, s3Client *s3.Client, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
-//	// TODO
-//	return nil
-//}
+func processChecksumVerification(
+	ctx context.Context,
+	s3Client *s3.Client,
+	dynamodbClient *dynamodb.Client,
+	obj checksum.S3Object,
+	checksumTable string,
+	schedulerTable string,
+) error {
+	log.Printf("Starting checksum verification for: %s/%s", obj.Bucket, obj.Key)
+
+	//currentTime := time.Now()
+	//nextScheduledTime := db.GetNextScheduledTime()
+
+	checksumRecord, err := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
+	if err != nil {
+		// TODO update checksumRecord for failure and PutChecksumRecord (continue)
+		return err
+	}
+
+	calc := checksum.NewS3Calculator(s3Client)
+	checksumResult, err := calc.CalculateChecksum(ctx, obj)
+	if err != nil {
+		// TODO update checksumRecord for failure and PutChecksumRecord (continue)
+		return err
+	}
+
+	// TODO: remove these temporary logging statements
+	log.Printf("Calculated checksum: %s", checksumResult)
+	log.Printf("Checksum record: %v", checksumRecord)
+
+	// TODO: continue implementation ...
+	// - Compare with checksumResult with checkSumRecord.Checksum
+	// - Not ok: update LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
+	// - ok: update LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
+
+	return nil
+}
 
 func main() {
 	lambda.Start(handler)
