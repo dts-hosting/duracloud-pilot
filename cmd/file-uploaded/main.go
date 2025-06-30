@@ -65,12 +65,12 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
-			// Only retry if the uploaded file exists
-			log.Printf("Failed to process uploaded object %s/%s: %v", obj.Bucket, obj.Key, err)
-			// TODO: check if the object actually exists, if it does add to failed and notify (expected but failed)
-			failedEvents = append(failedEvents, events.SQSBatchItemFailure{
-				ItemIdentifier: parsedEvent.MessageId,
-			})
+			if files.TryObject(ctx, s3Client, obj) {
+				// Only retry if the uploaded file (still) exists
+				failedEvents = append(failedEvents, events.SQSBatchItemFailure{
+					ItemIdentifier: parsedEvent.MessageId,
+				})
+			}
 		}
 	}
 
