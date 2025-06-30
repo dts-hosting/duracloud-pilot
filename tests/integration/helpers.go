@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"duracloud/internal/buckets"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -69,7 +70,7 @@ func assertBucketsExist(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		assert.True(t, bucketExists(ctx, s3Client, primaryBucket),
 			"Primary bucket %s should exist", primaryBucket)
 
-		replicationBucket := fmt.Sprintf("%s-%s-replication", stackName, testBucket)
+		replicationBucket := fmt.Sprintf("%s-%s%s", stackName, testBucket, buckets.ReplicationSuffix)
 		assert.True(t, bucketExists(ctx, s3Client, replicationBucket),
 			"Replication bucket %s should exist", replicationBucket)
 	}
@@ -82,7 +83,7 @@ func assertBucketsNotExist(t *testing.T, ctx context.Context, s3Client *s3.Clien
 		assert.False(t, bucketExists(ctx, s3Client, primaryBucket),
 			"Primary bucket %s should NOT exist", primaryBucket)
 
-		replicationBucket := fmt.Sprintf("%s-%s-replication", stackName, testBucket)
+		replicationBucket := fmt.Sprintf("%s-%s%s", stackName, testBucket, buckets.ReplicationSuffix)
 		assert.False(t, bucketExists(ctx, s3Client, replicationBucket),
 			"Replication bucket %s should NOT exist", replicationBucket)
 	}
@@ -101,7 +102,7 @@ func cleanupTestBuckets(ctx context.Context, s3Client *s3.Client, stackName stri
 
 		deleteBucketCompletely(ctx, s3Client, bucketName)
 
-		replicationBucketName := fmt.Sprintf("%s-replication", bucketName)
+		replicationBucketName := fmt.Sprintf("%s%s", bucketName, buckets.ReplicationSuffix)
 		deleteBucketCompletely(ctx, s3Client, replicationBucketName)
 	}
 }
@@ -164,15 +165,15 @@ func deleteBucketCompletely(ctx context.Context, s3Client *s3.Client, bucketName
 }
 
 func generateUniqueBucketNames(baseName string, count int, suffix string) []string {
-	var buckets []string
+	var bucketsNames []string
 
 	for i := 0; i < count; i++ {
 		uid := uuid.New().String()[:12]
 		bucketName := fmt.Sprintf("%s-%s%s", baseName, uid, suffix)
-		buckets = append(buckets, bucketName)
+		bucketsNames = append(bucketsNames, bucketName)
 	}
 
-	return buckets
+	return bucketsNames
 }
 
 func getBucketInventory(ctx context.Context, s3Client *s3.Client, bucketName string) []types.InventoryConfiguration {
@@ -279,14 +280,14 @@ func lambdaFunctionExists(ctx context.Context, lambdaClient *lambda.Client, func
 	return err == nil
 }
 
-func uploadRequestAndWait(t *testing.T, ctx context.Context, s3Client *s3.Client, stackName string, buckets []string, waitTime time.Duration) {
+func uploadRequestAndWait(t *testing.T, ctx context.Context, s3Client *s3.Client, stackName string, bucketNames []string, waitTime time.Duration) {
 	var content strings.Builder
-	for _, bucketName := range buckets {
+	for _, bucketName := range bucketNames {
 		content.WriteString(bucketName + "\n")
 	}
 
 	// Upload request file
-	triggerBucket := fmt.Sprintf("%s-bucket-requested", stackName)
+	triggerBucket := fmt.Sprintf("%s%s", stackName, buckets.BucketRequestedSuffix)
 	requestKey := fmt.Sprintf("test-request-%d.txt", time.Now().Unix())
 
 	err := uploadToS3(ctx, s3Client, triggerBucket, requestKey, content.String())
@@ -308,7 +309,7 @@ func uploadToS3(ctx context.Context, s3Client *s3.Client, bucketName, key, conte
 
 // Verify bucket configurations for a single bucket
 func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName, stackName string) {
-	isPublicBucket := strings.HasSuffix(bucketName, "-public")
+	isPublicBucket := strings.HasSuffix(bucketName, buckets.PublicSuffix)
 
 	t.Run("Versioning", func(t *testing.T) {
 		versioning := getBucketVersioning(ctx, s3Client, bucketName)
@@ -354,7 +355,11 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		inventory := getBucketInventory(ctx, s3Client, bucketName)
 		assert.NotEmpty(t, inventory)
 		assert.Equal(t, types.InventoryFrequencyDaily, inventory[0].Schedule.Frequency)
-		assert.Equal(t, fmt.Sprintf("arn:aws:s3:::%s-managed", stackName), *inventory[0].Destination.S3BucketDestination.Bucket)
+		assert.Equal(
+			t,
+			fmt.Sprintf("arn:aws:s3:::%s%s", stackName, buckets.ManagedSuffix),
+			*inventory[0].Destination.S3BucketDestination.Bucket,
+		)
 		assert.Contains(t, *inventory[0].Destination.S3BucketDestination.Prefix, "inventory")
 	})
 
@@ -362,7 +367,11 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		logging := getBucketLogging(ctx, s3Client, bucketName)
 		assert.NotNil(t, logging)
 		assert.NotEmpty(t, logging.LoggingEnabled)
-		assert.Equal(t, fmt.Sprintf("%s-managed", stackName), *logging.LoggingEnabled.TargetBucket)
+		assert.Equal(
+			t,
+			fmt.Sprintf("%s%s", stackName, buckets.ManagedSuffix),
+			*logging.LoggingEnabled.TargetBucket,
+		)
 		assert.Contains(t, *logging.LoggingEnabled.TargetPrefix, "audit")
 	})
 
@@ -371,7 +380,11 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		assert.NotNil(t, replication)
 		assert.NotEmpty(t, replication.ReplicationConfiguration.Rules)
 		assert.Equal(t, types.ReplicationRuleStatusEnabled, replication.ReplicationConfiguration.Rules[0].Status)
-		assert.Equal(t, fmt.Sprintf("arn:aws:s3:::%s-replication", bucketName), *replication.ReplicationConfiguration.Rules[0].Destination.Bucket)
+		assert.Equal(
+			t,
+			fmt.Sprintf("arn:aws:s3:::%s%s", bucketName, buckets.ReplicationSuffix),
+			*replication.ReplicationConfiguration.Rules[0].Destination.Bucket,
+		)
 	})
 
 	t.Run("Tags", func(t *testing.T) {
