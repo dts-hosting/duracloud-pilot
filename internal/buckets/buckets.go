@@ -78,7 +78,7 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to add  bucket tags: %v", err)
+		return BucketTagsAddFailedError(err)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName st
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal policy: %v", err)
+		return PolicyMarshallingError(err)
 	}
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
@@ -108,7 +108,7 @@ func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName st
 		Policy: aws.String(string(policyJSON)),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to put bucket policy: %v", err)
+		return BucketPolicyApplicationError(err)
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to set lifecycle rule: %v", err)
+		return LifecycleRuleSetFailedError(err)
 	}
 	return nil
 }
@@ -157,7 +157,7 @@ func AddLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string, s
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to configure lifecycle: %v", err)
+		return LifecycleConfigurationFailedError(err)
 	}
 	return nil
 }
@@ -178,7 +178,7 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("failed to marshal bucket policy: %v", err)
+		return BucketPolicyMarshallingError(err)
 	}
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
@@ -186,7 +186,7 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 		Policy: aws.String(string(policyJSON)),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to apply public bucket policy: %v", err)
+		return BucketPolicyApplicationError(err)
 	}
 	return nil
 }
@@ -204,7 +204,7 @@ func AddStandardLifecycle(ctx context.Context, s3Client *s3.Client, bucketName s
 func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
 	if !ok {
-		return fmt.Errorf("error retrieving aws context")
+		return AWSContextRetrievalError()
 	}
 
 	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -214,7 +214,7 @@ func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create bucket: %v", err)
+		return BucketCreationFailedError(err)
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func DeleteBucket(ctx context.Context, s3Client *s3.Client, bucketName string) e
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to delete bucket: %v", err)
+		return BucketDeletionFailedError(err)
 	}
 	return nil
 }
@@ -237,7 +237,7 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to enable EventBridge notifications: %v", err)
+		return EventBridgeEnableFailedError(err)
 	}
 	return nil
 }
@@ -245,7 +245,7 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
 func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName string, destBucketName string) error {
 	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
 	if !ok {
-		return fmt.Errorf("error retrieving aws context")
+		return AWSContextRetrievalError()
 	}
 
 	_, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
@@ -275,7 +275,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to enable inventory configuration: %v", err)
+		return InventoryConfigurationFailedError(err)
 	}
 	return nil
 }
@@ -291,7 +291,7 @@ func EnableLogging(ctx context.Context, s3Client *s3.Client, srcBucketName strin
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to enable access logging: %v", err)
+		return LoggingEnableFailedError(err)
 	}
 	return nil
 }
@@ -331,7 +331,7 @@ func EnableReplication(ctx context.Context, s3Client *s3.Client, srcBucketName s
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to enable replication configuration: %v", err)
+		return ReplicationConfigurationFailedError(err)
 	}
 	return nil
 }
@@ -344,7 +344,7 @@ func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName strin
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to enable versioning: %v", err)
+		return VersioningEnableFailedError(err)
 	}
 	return nil
 }
@@ -353,7 +353,7 @@ func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
 	maxBuckets, err := strconv.Atoi(bucketsPerRequest)
 
 	if err != nil {
-		return -1, fmt.Errorf("unable to read max buckets per request variable due to: %v", err)
+		return -1, MaxBucketsPerRequestReadError(err)
 	}
 
 	return maxBuckets, nil
@@ -369,7 +369,7 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get object: %s from %s due to %s", key, bucket, err)
+		return nil, ObjectGetFailedError(key, bucket, err)
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -382,18 +382,17 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 		if ValidateBucketName(ctx, line) {
 			buckets = append(buckets, line)
 		} else {
-			return nil, fmt.Errorf("invalid bucket name requested: %s", line)
+			return nil, InvalidBucketNameRequestedError(line)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
+		return nil, ResponseReadingError(err)
 	}
 
 	bucketsRequested := len(buckets)
 	if bucketsRequested >= limit {
-		return nil, fmt.Errorf("exceeded maximum allowed buckets per request [%d] with [%d]",
-			limit, bucketsRequested)
+		return nil, ExceededMaxBucketsPerRequestError(limit, bucketsRequested)
 	}
 
 	return buckets, nil
@@ -465,7 +464,7 @@ func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) err
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to disable public access block: %v", err)
+		return PublicAccessBlockDisableError(err)
 	}
 	return nil
 }
@@ -476,7 +475,7 @@ func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) e
 	})
 
 	if err != nil {
-		return fmt.Errorf("failed to delete bucket policy: %v", err)
+		return BucketPolicyDeletionError(err)
 	}
 	return nil
 }
@@ -521,7 +520,7 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 		ContentType: aws.String("text/plain"),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to write bucket status: %v", err)
+		return BucketStatusWriteFailedError(err)
 	}
 
 	return nil

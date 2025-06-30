@@ -58,6 +58,7 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 		err = processChecksumVerification(ctx, s3Client, dynamodbClient, obj, checksumTable, schedulerTable)
 		if err != nil {
 			log.Printf("failed to process checksum verification: %s", err.Error())
+			// TODO: put checksum record failure
 			continue
 		}
 	}
@@ -101,7 +102,6 @@ func processChecksumVerification(
 
 	checksumRecord, err := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
 	if err != nil {
-		// TODO update checksumRecord for failure and PutChecksumRecord (continue)
 		return err
 	}
 
@@ -118,7 +118,7 @@ func processChecksumVerification(
 
 	// TODO: continue implementation ...
 	// - Compare with checksumResult with checkSumRecord.Checksum
-	// - Not ok: update LastChecksumDate & LastChecksumSuccess (f) & Msg, PutChecksumRecord
+	// - Not ok: return err checksum does not match
 	// - ok: update LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
 
 	return nil
