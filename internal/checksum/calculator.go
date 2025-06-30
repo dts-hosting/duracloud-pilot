@@ -3,6 +3,7 @@ package checksum
 import (
 	"context"
 	"crypto/md5"
+	"duracloud/internal/files"
 	"errors"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,24 +50,8 @@ func NewS3CalculatorWithHasher(s3Client S3ClientInterface, hasherFunc func() has
 	}
 }
 
-// S3Object represents an S3 object for checksum calculation
-type S3Object struct {
-	Bucket string
-	Key    string
-}
-
-// NewS3Object creates a new S3Object
-func NewS3Object(bucket, key string) S3Object {
-	return S3Object{Bucket: bucket, Key: key}
-}
-
-// URI returns a human-readable URI for the S3 object
-func (obj S3Object) URI() string {
-	return fmt.Sprintf("s3://%s/%s", obj.Bucket, obj.Key)
-}
-
 // CalculateChecksum streams an object from S3 and calculates its checksum
-func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj S3Object) (string, error) {
+func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj files.S3Object) (string, error) {
 	headResp, err := c.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(obj.Bucket),
 		Key:    aws.String(obj.Key),

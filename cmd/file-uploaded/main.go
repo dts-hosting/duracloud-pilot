@@ -4,6 +4,7 @@ import (
 	"context"
 	"duracloud/internal/checksum"
 	"duracloud/internal/db"
+	"duracloud/internal/files"
 	"duracloud/internal/queues"
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/events"
@@ -60,7 +61,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 			continue
 		}
 
-		obj := checksum.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
+		obj := files.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
 		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
@@ -84,7 +85,7 @@ func processUploadedObject(
 	ctx context.Context,
 	s3Client *s3.Client,
 	dynamodbClient *dynamodb.Client,
-	obj checksum.S3Object,
+	obj files.S3Object,
 ) error {
 	nextScheduledTime, err := db.GetNextScheduledTime()
 	if err != nil {

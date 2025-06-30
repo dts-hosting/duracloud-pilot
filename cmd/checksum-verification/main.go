@@ -4,6 +4,7 @@ import (
 	"context"
 	"duracloud/internal/checksum"
 	"duracloud/internal/db"
+	"duracloud/internal/files"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -66,18 +67,18 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 	return nil
 }
 
-func extractBucketAndObject(record events.DynamoDBEventRecord) (checksum.S3Object, error) {
+func extractBucketAndObject(record events.DynamoDBEventRecord) (files.S3Object, error) {
 	bucket, exists := record.Change.OldImage[string(db.ChecksumTableBucketNameId)]
 	if !exists {
-		return checksum.S3Object{}, fmt.Errorf("missing bucket name attribute")
+		return files.S3Object{}, fmt.Errorf("missing bucket name attribute")
 	}
 
 	object, exists := record.Change.OldImage[string(db.ChecksumTableObjectKeyId)]
 	if !exists {
-		return checksum.S3Object{}, fmt.Errorf("missing object key attribute")
+		return files.S3Object{}, fmt.Errorf("missing object key attribute")
 	}
 
-	return checksum.S3Object{Bucket: bucket.String(), Key: object.String()}, nil
+	return files.S3Object{Bucket: bucket.String(), Key: object.String()}, nil
 }
 
 func isTTLExpiry(record events.DynamoDBEventRecord) bool {
@@ -91,7 +92,7 @@ func processChecksumVerification(
 	ctx context.Context,
 	s3Client *s3.Client,
 	dynamodbClient *dynamodb.Client,
-	obj checksum.S3Object,
+	obj files.S3Object,
 	checksumTable string,
 	schedulerTable string,
 ) error {

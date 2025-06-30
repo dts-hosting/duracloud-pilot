@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"duracloud/internal/checksum"
 	"duracloud/internal/db"
+	"duracloud/internal/files"
 	"duracloud/internal/queues"
 	"encoding/json"
 	"github.com/aws/aws-lambda-go/events"
@@ -57,7 +57,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 			continue
 		}
 
-		obj := checksum.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
+		obj := files.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
 		log.Printf("Processing delete event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 		if err := processDeletedObject(ctx, dynamodbClient, obj); err != nil {
@@ -78,18 +78,13 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	}, nil
 }
 
-func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj checksum.S3Object) error {
-	checksumRecord := db.ChecksumRecord{
-		BucketName: obj.Bucket,
-		ObjectKey:  obj.Key,
-	}
-
-	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj files.S3Object) error {
+	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
 	if err != nil {
 		return err
 	}
 
-	err = db.DeleteChecksumRecord(ctx, dynamodbClient, schedulerTable, checksumRecord)
+	err = db.DeleteChecksumRecord(ctx, dynamodbClient, schedulerTable, obj)
 	if err != nil {
 		return err
 	}
