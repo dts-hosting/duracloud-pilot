@@ -7,20 +7,36 @@ sidebar:
 To create a bucket you must create a text file (.txt) containing the names of up to
 five buckets you want to create.
 
-- Each bucket name must be entered on it's own line
-- Bucket names can only contain alphanumeric characters and "-", no special characters
-- Bucket names should be no more than 256 characters total
-- Bucket names are automatically prefixed with the stack name, do not include the stack name in the text file
-- To create a publicly accessible bucket the bucket name must end with "-public"
+### Naming rules
+
+Bucket names are automatically prefixed with the stack name, do not include the stack name in the file.
+
+Each bucket name must be entered on its own line.
+
+Bucket names can only contain alphanumeric characters and "-", no other special characters are allowed.
+
+Bucket names should not begin or end with "-".
+
+Bucket names should be no more than 63 characters total, including:
+  - the stack name prefix (`duracloud-$ID`).
+  - reserve five characters for the `-repl` suffix described below.
+
+Practically this means your names should be no more than 63 - 5 - (length of your `duracloud-$ID`).
+
+To create a publicly accessible bucket the bucket name must end with `-public`, but note that this
+subtracts an additional seven characters from the max length of the bucket name.
+
+### Reserved prefixes and suffixes
 
 There are some reserved **prefixes** and **suffixes** that cannot be used in the bucket name:
 
-- `duracloud-` - this is always already included as the foremost bucket name prefix
+- `duracloud-` - this is already included as the foremost bucket name prefix
 - `-bucket-requested` - Used for bucket request files
 - `-logs` - Used for access logging buckets
-- `-managed` - Used for system management buckets
-- `-public` - Used to identify public buckets
-- `-replication` - Used for replication target buckets
+- `-managed` - Used for system managed buckets
+- `-repl` - Used for replication target buckets
+
+### Steps
 
 Upload this file to the `duracloud-$ID-bucket-requested` bucket. The file will be processed
 in the background and an attempt will be made to create each bucket. In a short time (0-2
@@ -32,6 +48,9 @@ Review this file when it becomes available.
 If you refresh your client view or otherwise reconnect to s3 any buckets that were
 successfully created and configured will now be present. You will also see an additional
 replication bucket for each bucket that was created (that uses the same name but but has a
-"-replication" suffix). You will be able to list files in these buckets but not download them.
+`-repl` suffix). You will be able to list files in these buckets but not download them.
 
 The newly created buckets will now be usable and files can be uploaded.
+
+To create more buckets it's ok to re-use and re-upload the same file containing new bucket names,
+or to create and upload an entirely new file, either will work.

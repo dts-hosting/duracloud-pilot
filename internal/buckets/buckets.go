@@ -30,7 +30,7 @@ const (
 	ApplicationTagValue              = "DuraCloud"
 	BucketNameMaxChars               = 63
 	BucketRequestedFileErrorKey      = "error-processing-bucket-requested-file"
-	LifeCycleTransitionToGlacierDays = 3
+	LifeCycleTransitionToGlacierDays = 7
 	NonCurrentVersionExpirationDays  = 2
 )
 
