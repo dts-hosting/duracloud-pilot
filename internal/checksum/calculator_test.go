@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/sha256"
+	"duracloud/internal/files"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
@@ -117,7 +118,7 @@ func TestS3Calculator_CalculateChecksum(t *testing.T) {
 			mockClient.addObject(tt.bucket, tt.key, tt.content)
 
 			calc := NewS3Calculator(mockClient)
-			obj := NewS3Object(tt.bucket, tt.key)
+			obj := files.NewS3Object(tt.bucket, tt.key)
 
 			result, err := calc.CalculateChecksum(context.Background(), obj)
 
@@ -197,7 +198,7 @@ func TestS3Calculator_ErrorHandling(t *testing.T) {
 			tt.setupError(mockClient)
 
 			calc := NewS3Calculator(mockClient)
-			obj := NewS3Object(tt.bucket, tt.key)
+			obj := files.NewS3Object(tt.bucket, tt.key)
 
 			_, err := calc.CalculateChecksum(context.Background(), obj)
 
@@ -220,7 +221,7 @@ func TestS3Calculator_LargeFile(t *testing.T) {
 	mockClient.addObject("test-bucket", "large.txt", content)
 
 	calc := NewS3Calculator(mockClient)
-	obj := NewS3Object("test-bucket", "large.txt")
+	obj := files.NewS3Object("test-bucket", "large.txt")
 
 	result, err := calc.CalculateChecksum(context.Background(), obj)
 	if err != nil {
@@ -234,7 +235,7 @@ func TestS3Calculator_LargeFile(t *testing.T) {
 }
 
 func TestS3Object_URI(t *testing.T) {
-	obj := NewS3Object("my-bucket", "path/to/file.txt")
+	obj := files.NewS3Object("my-bucket", "path/to/file.txt")
 	expected := "s3://my-bucket/path/to/file.txt"
 
 	if obj.URI() != expected {

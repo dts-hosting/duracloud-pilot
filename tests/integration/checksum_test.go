@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"duracloud/internal/checksum"
+	"duracloud/internal/files"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -57,7 +58,7 @@ func TestChecksumVerification(t *testing.T) {
 			}
 
 			// Calculate checksum
-			obj := checksum.NewS3Object(testBucket, tt.key)
+			obj := files.NewS3Object(testBucket, tt.key)
 			result, err := calc.CalculateChecksum(ctx, obj)
 			if err != nil {
 				t.Fatalf("failed to calculate checksum: %v", err)

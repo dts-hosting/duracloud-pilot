@@ -3,7 +3,7 @@ package db
 import (
 	"context"
 	"crypto/rand"
-	"duracloud/internal/checksum"
+	"duracloud/internal/files"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -37,13 +37,13 @@ func DeleteChecksumRecord(
 	ctx context.Context,
 	client *dynamodb.Client,
 	table string,
-	record ChecksumRecord,
+	obj files.S3Object,
 ) error {
 	_, err := client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(table),
 		Key: map[string]types.AttributeValue{
-			"BucketName": &types.AttributeValueMemberS{Value: record.BucketName},
-			"ObjectKey":  &types.AttributeValueMemberS{Value: record.ObjectKey},
+			"BucketName": &types.AttributeValueMemberS{Value: obj.Bucket},
+			"ObjectKey":  &types.AttributeValueMemberS{Value: obj.Key},
 		},
 	})
 	return err
@@ -53,7 +53,7 @@ func GetChecksumRecord(
 	ctx context.Context,
 	client *dynamodb.Client,
 	checksumTable string,
-	obj checksum.S3Object,
+	obj files.S3Object,
 ) (ChecksumRecord, error) {
 	result, err := client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(checksumTable),
