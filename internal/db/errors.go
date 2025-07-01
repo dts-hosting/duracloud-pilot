@@ -11,14 +11,14 @@ var (
 	ErrUnmarshallingChecksum  = errors.New("failed to unmarshal checksum record")
 )
 
-func ChecksumRecordNotFoundError(bucket, key string) error {
+func ErrorChecksumRecordNotFound(bucket, key string) error {
 	return fmt.Errorf("%w: bucket=%s key=%s", ErrChecksumRecordNotFound, bucket, key)
 }
 
-func JitterGenerationError(jitterType string, cause error) error {
+func ErrorGeneratingJitter(jitterType string, cause error) error {
 	return fmt.Errorf("%w: type=%s cause=%v", ErrJitterGeneration, jitterType, cause)
 }
 
-func UnmarshallingChecksumError(cause error) error {
+func ErrorUnmarshallingChecksum(cause error) error {
 	return fmt.Errorf("%w: cause=%v", ErrUnmarshallingChecksum, cause)
 }

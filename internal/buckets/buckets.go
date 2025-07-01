@@ -78,7 +78,7 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 		},
 	})
 	if err != nil {
-		return BucketTagsAddFailedError(err)
+		return ErrorApplyingBucketTags(err)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName st
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return PolicyMarshallingError(err)
+		return ErrorMarshallingPolicy(err)
 	}
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
@@ -108,7 +108,7 @@ func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName st
 		Policy: aws.String(string(policyJSON)),
 	})
 	if err != nil {
-		return BucketPolicyApplicationError(err)
+		return ErrorApplyingBucketPolicy(err)
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ func AddExpiration(ctx context.Context, s3Client *s3.Client, bucketName string) 
 		},
 	})
 	if err != nil {
-		return LifecycleRuleSetFailedError(err)
+		return ErrorApplyingExpiration(err)
 	}
 	return nil
 }
@@ -157,7 +157,7 @@ func AddLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string, s
 		},
 	})
 	if err != nil {
-		return LifecycleConfigurationFailedError(err)
+		return ErrorApplyingLifecycle(err)
 	}
 	return nil
 }
@@ -178,7 +178,7 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 
 	policyJSON, err := json.Marshal(policy)
 	if err != nil {
-		return BucketPolicyMarshallingError(err)
+		return ErrorMarshallingBucketPolicy(err)
 	}
 
 	_, err = s3Client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
@@ -186,7 +186,7 @@ func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string
 		Policy: aws.String(string(policyJSON)),
 	})
 	if err != nil {
-		return BucketPolicyApplicationError(err)
+		return ErrorApplyingBucketPolicy(err)
 	}
 	return nil
 }
@@ -204,7 +204,7 @@ func AddStandardLifecycle(ctx context.Context, s3Client *s3.Client, bucketName s
 func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
 	if !ok {
-		return AWSContextRetrievalError()
+		return ErrorAWSContextRetrieval()
 	}
 
 	_, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{
@@ -214,7 +214,7 @@ func CreateNewBucket(ctx context.Context, s3Client *s3.Client, bucketName string
 		},
 	})
 	if err != nil {
-		return BucketCreationFailedError(err)
+		return ErrorBucketCreationFailed(err)
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func DeleteBucket(ctx context.Context, s3Client *s3.Client, bucketName string) e
 		Bucket: aws.String(bucketName),
 	})
 	if err != nil {
-		return BucketDeletionFailedError(err)
+		return ErrorBucketDeletionFailed(err)
 	}
 	return nil
 }
@@ -237,7 +237,7 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
 		},
 	})
 	if err != nil {
-		return EventBridgeEnableFailedError(err)
+		return ErrorApplyingEventBridge(err)
 	}
 	return nil
 }
@@ -245,7 +245,7 @@ func EnableEventBridge(ctx context.Context, s3Client *s3.Client, bucketName stri
 func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName string, destBucketName string) error {
 	awsCtx, ok := ctx.Value(accounts.AWSContextKey).(accounts.AWSContext)
 	if !ok {
-		return AWSContextRetrievalError()
+		return ErrorAWSContextRetrieval()
 	}
 
 	_, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
@@ -275,7 +275,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 	})
 
 	if err != nil {
-		return InventoryConfigurationFailedError(err)
+		return ErrorApplyingInventory(err)
 	}
 	return nil
 }
@@ -291,7 +291,7 @@ func EnableLogging(ctx context.Context, s3Client *s3.Client, srcBucketName strin
 		},
 	})
 	if err != nil {
-		return LoggingEnableFailedError(err)
+		return ErrorApplyingLogging(err)
 	}
 	return nil
 }
@@ -331,7 +331,7 @@ func EnableReplication(ctx context.Context, s3Client *s3.Client, srcBucketName s
 	})
 
 	if err != nil {
-		return ReplicationConfigurationFailedError(err)
+		return ErrorApplyingReplication(err)
 	}
 	return nil
 }
@@ -344,7 +344,7 @@ func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName strin
 		},
 	})
 	if err != nil {
-		return VersioningEnableFailedError(err)
+		return ErrorApplyingVersioning(err)
 	}
 	return nil
 }
@@ -353,7 +353,7 @@ func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
 	maxBuckets, err := strconv.Atoi(bucketsPerRequest)
 
 	if err != nil {
-		return -1, MaxBucketsPerRequestReadError(err)
+		return -1, ErrorReadingMaxBucketsPerRequest(err)
 	}
 
 	return maxBuckets, nil
@@ -369,7 +369,7 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	})
 
 	if err != nil {
-		return nil, ObjectGetFailedError(key, bucket, err)
+		return nil, ErrorRetrievingObject(key, bucket, err)
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -382,17 +382,17 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 		if ValidateBucketName(ctx, line) {
 			buckets = append(buckets, line)
 		} else {
-			return nil, InvalidBucketNameRequestedError(line)
+			return nil, ErrorInvalidBucketName(line)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, ResponseReadingError(err)
+		return nil, ErrorReadingResponse(err)
 	}
 
 	bucketsRequested := len(buckets)
 	if bucketsRequested >= limit {
-		return nil, ExceededMaxBucketsPerRequestError(limit, bucketsRequested)
+		return nil, ErrorExceededMaxBucketsPerRequest(limit, bucketsRequested)
 	}
 
 	return buckets, nil
@@ -464,7 +464,7 @@ func MakePublic(ctx context.Context, s3Client *s3.Client, bucketName string) err
 		},
 	})
 	if err != nil {
-		return PublicAccessBlockDisableError(err)
+		return ErrorApplyingPublicAccessBlock(err)
 	}
 	return nil
 }
@@ -475,7 +475,7 @@ func RemovePolicy(ctx context.Context, s3Client *s3.Client, bucketName string) e
 	})
 
 	if err != nil {
-		return BucketPolicyDeletionError(err)
+		return ErrorDeletingBucketPolicy(err)
 	}
 	return nil
 }
@@ -520,7 +520,7 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 		ContentType: aws.String("text/plain"),
 	})
 	if err != nil {
-		return BucketStatusWriteFailedError(err)
+		return ErrorBucketStatusUploadFailed(err)
 	}
 
 	return nil

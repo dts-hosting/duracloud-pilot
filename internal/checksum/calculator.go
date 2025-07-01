@@ -58,9 +58,9 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj files.S3Object
 	})
 	if err != nil {
 		if isS3NotFound(err) {
-			return "", ObjectNotFoundError(obj.URI())
+			return "", ErrorObjectNotFound(obj.URI())
 		}
-		return "", MetadataNotRetrievedError(obj.URI(), err)
+		return "", ErrorMetadataNotRetrieved(obj.URI(), err)
 	}
 
 	var fileSize int64
@@ -69,7 +69,7 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj files.S3Object
 	}
 
 	if fileSize > MaxFileSize {
-		return "", MaxFileSizeExceededError(obj.URI(), fileSize)
+		return "", ErrorMaxFileSizeExceeded(obj.URI(), fileSize)
 	}
 
 	log.Printf("Starting checksum calculation for %s - Size: %d bytes (%.2f MB)",
@@ -82,9 +82,9 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj files.S3Object
 	})
 	if err != nil {
 		if isS3NotFound(err) {
-			return "", ObjectNotFoundError(obj.URI())
+			return "", ErrorObjectNotFound(obj.URI())
 		}
-		return "", ObjectNotRetrievedError(obj.URI(), err)
+		return "", ErrorObjectNotRetrieved(obj.URI(), err)
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -102,12 +102,12 @@ func (c *S3Calculator) streamAndHash(reader io.Reader, uri string, expectedSize 
 
 	totalBytes, err := io.Copy(hashWriter, reader)
 	if err != nil {
-		return "", ReadingFromStreamError(uri, err)
+		return "", ErrorReadingFromStream(uri, err)
 	}
 
 	// Verify we read the expected amount
 	if totalBytes != expectedSize {
-		return "", BytesCountDoesNotMatchError(uri, expectedSize, totalBytes)
+		return "", ErrorBytesCountDoesNotMatch(uri, expectedSize, totalBytes)
 	}
 
 	checksum := fmt.Sprintf("%x", hashWriter.Sum(nil))
