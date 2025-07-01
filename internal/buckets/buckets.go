@@ -253,7 +253,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 		Id:     aws.String("InventoryReport"),
 		InventoryConfiguration: &types.InventoryConfiguration{
 			IsEnabled:              aws.Bool(true),
-			Id:                     aws.String("InventoryReport"),
+			Id:                     aws.String("report"),
 			IncludedObjectVersions: types.InventoryIncludedObjectVersionsAll,
 			Schedule: &types.InventorySchedule{
 				Frequency: types.InventoryFrequencyDaily,
@@ -263,7 +263,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 					AccountId: aws.String(awsCtx.AccountID),
 					Bucket:    aws.String(fmt.Sprintf("arn:aws:s3:::%s", destBucketName)),
 					Format:    types.InventoryFormatCsv,
-					Prefix:    aws.String(fmt.Sprintf("inventory/%s/", srcBucketName)),
+					Prefix:    aws.String("inventory"),
 				},
 			},
 			OptionalFields: []types.InventoryOptionalField{
