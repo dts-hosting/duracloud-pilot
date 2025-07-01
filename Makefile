@@ -22,7 +22,7 @@ build: ## Build the project (images, artifacts, etc.)
 	@sam build --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH) && sam validate
 
 .PHONY: cleanup
-cleanup: ## Cleanup bucket resources for a stack
+cleanup: ## Cleanup remote bucket and table resources for a stack
 	@./scripts/cleanup-stack.sh $(stack)
 
 .PHONY: creds
@@ -66,6 +66,10 @@ file-delete: ## Delete a file from a bucket (without prefixes)
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
+.PHONY: invoke-remote
+invoke-remote: ## Invoke a deployed function remotely
+	@sam remote invoke $(func) --event-file $(event) --stack-name $(stack)
+
 .PHONY: lint
 lint: ## Run linters
 	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
@@ -87,6 +91,6 @@ test: ## Run all tests and cleanup resources
 	$(MAKE) cleanup stack=$(stack)
 
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help

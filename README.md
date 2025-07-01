@@ -104,6 +104,18 @@ However, results will vary depending on how strongly the function depends on
 deployed resources. In most cases this is only useful for debugging the initial
 configuration and event payloads.
 
+The `make invoke-remote` task can be used to run deployed functions:
+
+```bash
+make invoke-remote func=ChecksumExporterFunction event=events/checksum-exporter/event.json stack=duracloud-lyrasis
+```
+
+To see the status of an export:
+
+```bash
+AWS_PROFILE=$PROFILE aws dynamodb describe-export --export-arn $ARN
+```
+
 ## Tests
 
 The stack indicated by `STACK_NAME` must be deployed first.
