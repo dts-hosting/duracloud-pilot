@@ -1,5 +1,9 @@
 name: Build and Push Docker Images
 
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -22,6 +26,8 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 2
+      fail-fast: false
       matrix:
         function:
           - bucket-requested
@@ -58,6 +64,7 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
+        timeout-minutes: 30
         with:
           context: .
           file: ./Dockerfile
