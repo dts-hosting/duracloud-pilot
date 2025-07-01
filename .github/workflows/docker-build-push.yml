@@ -14,7 +14,7 @@ on:
       - "Dockerfile"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/docker_build_push.yml"
+      - ".github/workflows/docker-build-push.yml"
       - "cmd/**"
       - "internal/**"
 
