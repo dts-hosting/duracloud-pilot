@@ -7,6 +7,7 @@ import (
 	"duracloud/internal/files"
 	"duracloud/internal/queues"
 	"encoding/json"
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -64,7 +66,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		obj := files.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
 		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
-		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj); err != nil {
+		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj, parsedEvent.Etag()); err != nil {
 			if files.TryObject(ctx, s3Client, obj) {
 				// Only retry if the uploaded file (still) exists
 				failedEvents = append(failedEvents, events.SQSBatchItemFailure{
@@ -86,6 +88,7 @@ func processUploadedObject(
 	s3Client *s3.Client,
 	dynamodbClient *dynamodb.Client,
 	obj files.S3Object,
+	etag string,
 ) error {
 	nextScheduledTime, err := db.GetNextScheduledTime()
 	if err != nil {
@@ -104,6 +107,12 @@ func processUploadedObject(
 		LastChecksumMessage: "ok",
 		LastChecksumSuccess: true,
 		NextChecksumDate:    nextScheduledTime,
+	}
+
+	// Check that the hash matches the etag for non-multipart uploads (those are calculated differently)
+	// This provides a "free" reference check that the calculated hash is accurate
+	if err == nil && !strings.Contains(etag, "-") && hash != etag {
+		err = fmt.Errorf("checksum does not match etag: calculated=%s etag=%s", hash, etag)
 	}
 
 	if err != nil {
