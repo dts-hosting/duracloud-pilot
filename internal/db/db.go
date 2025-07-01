@@ -68,12 +68,12 @@ func GetChecksumRecord(
 
 	checksumRecord := ChecksumRecord{}
 	if result.Item == nil {
-		return ChecksumRecord{}, ChecksumRecordNotFoundError(obj.Bucket, obj.Key)
+		return ChecksumRecord{}, ErrorChecksumRecordNotFound(obj.Bucket, obj.Key)
 	}
 
 	err = attributevalue.UnmarshalMap(result.Item, &checksumRecord)
 	if err != nil {
-		return ChecksumRecord{}, UnmarshallingChecksumError(err)
+		return ChecksumRecord{}, ErrorUnmarshallingChecksum(err)
 	}
 
 	return checksumRecord, nil
@@ -84,17 +84,17 @@ func GetNextScheduledTime() (time.Time, error) {
 
 	jitterDays, err := rand.Int(rand.Reader, big.NewInt(30))
 	if err != nil {
-		return baseTime, JitterGenerationError("day", err)
+		return baseTime, ErrorGeneratingJitter("day", err)
 	}
 
 	jitterHours, err := rand.Int(rand.Reader, big.NewInt(24))
 	if err != nil {
-		return baseTime, JitterGenerationError("hour", err)
+		return baseTime, ErrorGeneratingJitter("hour", err)
 	}
 
 	jitterMinutes, err := rand.Int(rand.Reader, big.NewInt(60))
 	if err != nil {
-		return baseTime, JitterGenerationError("minute", err)
+		return baseTime, ErrorGeneratingJitter("minute", err)
 	}
 
 	scheduledTime := baseTime.

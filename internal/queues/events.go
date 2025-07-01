@@ -16,7 +16,8 @@ type S3EventBridgeEvent struct {
 			Name string `json:"name"`
 		} `json:"bucket"`
 		Object struct {
-			Key string `json:"key"`
+			Etag string `json:"etag"`
+			Key  string `json:"key"`
 		} `json:"object"`
 	} `json:"detail"`
 }
@@ -34,6 +35,11 @@ type SQSEventWrapper struct {
 // BucketName extracts the bucket name
 func (e *S3EventBridgeEvent) BucketName() string {
 	return e.Detail.Bucket.Name
+}
+
+// Etag extracts the object etag
+func (e *S3EventBridgeEvent) Etag() string {
+	return e.Detail.Object.Etag
 }
 
 // ObjectKey extracts the object key

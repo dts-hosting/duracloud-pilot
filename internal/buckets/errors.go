@@ -6,114 +6,114 @@ import (
 )
 
 var (
-	ErrAWSContextRetrieval            = errors.New("error retrieving aws context")
-	ErrBucketCreationFailed           = errors.New("failed to create bucket")
-	ErrBucketDeletionFailed           = errors.New("failed to delete bucket")
-	ErrBucketPolicyApplication        = errors.New("failed to apply bucket policy")
-	ErrBucketPolicyDeletion           = errors.New("failed to delete bucket policy")
-	ErrBucketPolicyMarshalling        = errors.New("failed to marshal bucket policy")
-	ErrBucketStatusWriteFailed        = errors.New("failed to write bucket status")
-	ErrBucketTagsAddFailed            = errors.New("failed to add bucket tags")
-	ErrEventBridgeEnableFailed        = errors.New("failed to enable EventBridge notifications")
-	ErrExceededMaxBucketsPerRequest   = errors.New("exceeded maximum allowed buckets per request")
-	ErrInventoryConfigurationFailed   = errors.New("failed to enable inventory configuration")
-	ErrInvalidBucketNameRequested     = errors.New("invalid bucket name requested")
-	ErrLifecycleConfigurationFailed   = errors.New("failed to configure lifecycle")
-	ErrLifecycleRuleSetFailed         = errors.New("failed to set lifecycle rule")
-	ErrLoggingEnableFailed            = errors.New("failed to enable access logging")
-	ErrMaxBucketsPerRequestRead       = errors.New("unable to read max buckets per request variable")
-	ErrObjectGetFailed                = errors.New("failed to get object")
-	ErrPolicyMarshalling              = errors.New("failed to marshal policy")
-	ErrPublicAccessBlockDisable       = errors.New("failed to disable public access block")
-	ErrReplicationConfigurationFailed = errors.New("failed to enable replication configuration")
-	ErrResponseReading                = errors.New("error reading response")
-	ErrVersioningEnableFailed         = errors.New("failed to enable versioning")
+	ErrApplyingBucketPolicy         = errors.New("failed to apply bucket policy")
+	ErrApplyingBucketTags           = errors.New("failed to add bucket tags")
+	ErrApplyingEventBridge          = errors.New("failed to enable EventBridge notifications")
+	ErrApplyingExpiration           = errors.New("failed to set lifecycle rule")
+	ErrApplyingInventory            = errors.New("failed to enable inventory configuration")
+	ErrApplyingLifecycle            = errors.New("failed to configure lifecycle")
+	ErrApplyingLogging              = errors.New("failed to enable access logging")
+	ErrApplyingPublicAccessBlock    = errors.New("failed to disable public access block")
+	ErrApplyingReplication          = errors.New("failed to enable replication configuration")
+	ErrApplyingVersioning           = errors.New("failed to enable versioning")
+	ErrAWSContextRetrieval          = errors.New("error retrieving aws context")
+	ErrBucketCreationFailed         = errors.New("failed to create bucket")
+	ErrBucketDeletionFailed         = errors.New("failed to delete bucket")
+	ErrBucketStatusUploadFailed     = errors.New("failed to write bucket status")
+	ErrDeletingBucketPolicy         = errors.New("failed to delete bucket policy")
+	ErrExceededMaxBucketsPerRequest = errors.New("exceeded maximum allowed buckets per request")
+	ErrInvalidBucketName            = errors.New("invalid bucket name requested")
+	ErrMarshallingBucketPolicy      = errors.New("failed to marshal bucket policy")
+	ErrMarshallingPolicy            = errors.New("failed to marshal policy")
+	ErrReadingMaxBucketsPerRequest  = errors.New("unable to read max buckets per request variable")
+	ErrReadingResponse              = errors.New("error reading response")
+	ErrRetrievingObject             = errors.New("failed to get object")
 )
 
-func AWSContextRetrievalError() error {
+func ErrorApplyingBucketPolicy(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingBucketPolicy, cause)
+}
+
+func ErrorApplyingBucketTags(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingBucketTags, cause)
+}
+
+func ErrorApplyingEventBridge(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingEventBridge, cause)
+}
+
+func ErrorApplyingExpiration(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingExpiration, cause)
+}
+
+func ErrorApplyingInventory(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingInventory, cause)
+}
+
+func ErrorApplyingLifecycle(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingLifecycle, cause)
+}
+
+func ErrorApplyingLogging(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingLogging, cause)
+}
+
+func ErrorApplyingPublicAccessBlock(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingPublicAccessBlock, cause)
+}
+
+func ErrorApplyingReplication(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingReplication, cause)
+}
+
+func ErrorApplyingVersioning(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrApplyingVersioning, cause)
+}
+
+func ErrorAWSContextRetrieval() error {
 	return ErrAWSContextRetrieval
 }
 
-func BucketCreationFailedError(cause error) error {
+func ErrorBucketCreationFailed(cause error) error {
 	return fmt.Errorf("%w: cause=%v", ErrBucketCreationFailed, cause)
 }
 
-func BucketDeletionFailedError(cause error) error {
+func ErrorBucketDeletionFailed(cause error) error {
 	return fmt.Errorf("%w: cause=%v", ErrBucketDeletionFailed, cause)
 }
 
-func BucketPolicyApplicationError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrBucketPolicyApplication, cause)
+func ErrorBucketStatusUploadFailed(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrBucketStatusUploadFailed, cause)
 }
 
-func BucketPolicyDeletionError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrBucketPolicyDeletion, cause)
+func ErrorDeletingBucketPolicy(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrDeletingBucketPolicy, cause)
 }
 
-func BucketPolicyMarshallingError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrBucketPolicyMarshalling, cause)
-}
-
-func BucketStatusWriteFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrBucketStatusWriteFailed, cause)
-}
-
-func BucketTagsAddFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrBucketTagsAddFailed, cause)
-}
-
-func EventBridgeEnableFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrEventBridgeEnableFailed, cause)
-}
-
-func ExceededMaxBucketsPerRequestError(limit, requested int) error {
+func ErrorExceededMaxBucketsPerRequest(limit, requested int) error {
 	return fmt.Errorf("%w: limit=%d requested=%d", ErrExceededMaxBucketsPerRequest, limit, requested)
 }
 
-func InventoryConfigurationFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrInventoryConfigurationFailed, cause)
+func ErrorInvalidBucketName(bucketName string) error {
+	return fmt.Errorf("%w: bucket=%s", ErrInvalidBucketName, bucketName)
 }
 
-func InvalidBucketNameRequestedError(bucketName string) error {
-	return fmt.Errorf("%w: bucket=%s", ErrInvalidBucketNameRequested, bucketName)
+func ErrorMarshallingBucketPolicy(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrMarshallingBucketPolicy, cause)
 }
 
-func LifecycleConfigurationFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrLifecycleConfigurationFailed, cause)
+func ErrorMarshallingPolicy(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrMarshallingPolicy, cause)
 }
 
-func LifecycleRuleSetFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrLifecycleRuleSetFailed, cause)
+func ErrorReadingMaxBucketsPerRequest(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrReadingMaxBucketsPerRequest, cause)
 }
 
-func LoggingEnableFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrLoggingEnableFailed, cause)
+func ErrorReadingResponse(cause error) error {
+	return fmt.Errorf("%w: cause=%v", ErrReadingResponse, cause)
 }
 
-func MaxBucketsPerRequestReadError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrMaxBucketsPerRequestRead, cause)
-}
-
-func ObjectGetFailedError(key, bucket string, cause error) error {
-	return fmt.Errorf("%w: key=%s bucket=%s cause=%v", ErrObjectGetFailed, key, bucket, cause)
-}
-
-func PolicyMarshallingError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrPolicyMarshalling, cause)
-}
-
-func PublicAccessBlockDisableError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrPublicAccessBlockDisable, cause)
-}
-
-func ReplicationConfigurationFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrReplicationConfigurationFailed, cause)
-}
-
-func ResponseReadingError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrResponseReading, cause)
-}
-
-func VersioningEnableFailedError(cause error) error {
-	return fmt.Errorf("%w: cause=%v", ErrVersioningEnableFailed, cause)
+func ErrorRetrievingObject(key, bucket string, cause error) error {
+	return fmt.Errorf("%w: key=%s bucket=%s cause=%v", ErrRetrievingObject, key, bucket, cause)
 }

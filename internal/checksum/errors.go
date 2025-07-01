@@ -14,7 +14,7 @@ var (
 	ErrReadingFromStream      = errors.New("failed to read from stream")
 )
 
-func BytesCountDoesNotMatchError(uri string, bytesExpected int64, bytesRead int64) error {
+func ErrorBytesCountDoesNotMatch(uri string, bytesExpected int64, bytesRead int64) error {
 	return fmt.Errorf("%w: %s expected=%d read=%d",
 		ErrBytesCountDoesNotMatch,
 		uri,
@@ -23,7 +23,7 @@ func BytesCountDoesNotMatchError(uri string, bytesExpected int64, bytesRead int6
 	)
 }
 
-func MaxFileSizeExceededError(uri string, fileSize int64) error {
+func ErrorMaxFileSizeExceeded(uri string, fileSize int64) error {
 	return fmt.Errorf("%w: %s=%d bytes (%.2f GB) max=%d bytes (%.2f GB)",
 		ErrMaxFileSizeExceeded,
 		uri,
@@ -34,18 +34,18 @@ func MaxFileSizeExceededError(uri string, fileSize int64) error {
 	)
 }
 
-func MetadataNotRetrievedError(uri string, cause error) error {
+func ErrorMetadataNotRetrieved(uri string, cause error) error {
 	return fmt.Errorf("%w: uri=%s cause=%v", ErrMetadataNotRetrieved, uri, cause)
 }
 
-func ObjectNotFoundError(uri string) error {
+func ErrorObjectNotFound(uri string) error {
 	return fmt.Errorf("%w: uri=%s", ErrObjectNotFound, uri)
 }
 
-func ObjectNotRetrievedError(uri string, cause error) error {
+func ErrorObjectNotRetrieved(uri string, cause error) error {
 	return fmt.Errorf("%w: uri=%s cause=%v", ErrObjectNotRetrieved, uri, cause)
 }
 
-func ReadingFromStreamError(uri string, cause error) error {
+func ErrorReadingFromStream(uri string, cause error) error {
 	return fmt.Errorf("%w: uri=%s cause=%v", ErrReadingFromStream, uri, cause)
 }
