@@ -863,7 +863,7 @@ Resources:
   SNSEmailAlertTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${AWS::StackName}-email-alart-notifications"
+      TopicName: !Sub "${AWS::StackName}-email-alert-notifications"
 
   SNSEmailAlertSubscription:
     Type: AWS::SNS::Subscription
