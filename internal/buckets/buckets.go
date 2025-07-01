@@ -30,6 +30,7 @@ const (
 	ApplicationTagValue              = "DuraCloud"
 	BucketNameMaxChars               = 63
 	BucketRequestedFileErrorKey      = "error-processing-bucket-requested-file"
+	InventoryConfigId                = "inventory"
 	LifeCycleTransitionToGlacierDays = 7
 	NonCurrentVersionExpirationDays  = 2
 )
@@ -250,10 +251,10 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 
 	_, err := s3Client.PutBucketInventoryConfiguration(ctx, &s3.PutBucketInventoryConfigurationInput{
 		Bucket: aws.String(srcBucketName),
-		Id:     aws.String("InventoryReport"),
+		Id:     aws.String(InventoryConfigId),
 		InventoryConfiguration: &types.InventoryConfiguration{
 			IsEnabled:              aws.Bool(true),
-			Id:                     aws.String("report"),
+			Id:                     aws.String(InventoryConfigId),
 			IncludedObjectVersions: types.InventoryIncludedObjectVersionsAll,
 			Schedule: &types.InventorySchedule{
 				Frequency: types.InventoryFrequencyDaily,
@@ -263,7 +264,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 					AccountId: aws.String(awsCtx.AccountID),
 					Bucket:    aws.String(fmt.Sprintf("arn:aws:s3:::%s", destBucketName)),
 					Format:    types.InventoryFormatCsv,
-					Prefix:    aws.String("inventory"),
+					Prefix:    aws.String(InventoryConfigId),
 				},
 			},
 			OptionalFields: []types.InventoryOptionalField{
