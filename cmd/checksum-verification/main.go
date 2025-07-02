@@ -5,6 +5,7 @@ import (
 	"duracloud/internal/checksum"
 	"duracloud/internal/db"
 	"duracloud/internal/files"
+	"errors"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -15,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"log"
 	"os"
+	"time"
 )
 
 var (
@@ -98,18 +100,33 @@ func processChecksumVerification(
 ) error {
 	log.Printf("Starting checksum verification for: %s/%s", obj.Bucket, obj.Key)
 
-	//currentTime := time.Now()
-	//nextScheduledTime := db.GetNextScheduledTime()
+	currentTime := time.Now()
+	nextScheduledTime, err := db.GetNextScheduledTime()
+	if err != nil {
+		return err
+	}
 
 	checksumRecord, err := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
 	if err != nil {
 		return err
 	}
+	checksumRecord.LastChecksumDate = currentTime
+	checksumRecord.NextChecksumDate = nextScheduledTime
+	checksumRecord.LastChecksumSuccess = false
 
 	calc := checksum.NewS3Calculator(s3Client)
 	checksumResult, err := calc.CalculateChecksum(ctx, obj)
 	if err != nil {
-		// TODO update checksumRecord for failure and PutChecksumRecord (continue)
+		checksumRecord.LastChecksumMessage = err.Error()
+		// TODO: do we want to use checksumResult.Checksum to record it?
+		checksumRecord.Checksum = ""
+
+		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+		if err != nil {
+			log.Printf("Failed to record failed checksum in db due to : %v", err)
+			return err
+		}
+
 		return err
 	}
 
@@ -117,10 +134,25 @@ func processChecksumVerification(
 	log.Printf("Calculated checksum: %s", checksumResult)
 	log.Printf("Checksum record: %v", checksumRecord)
 
-	// TODO: continue implementation ...
-	// - Compare with checksumResult with checkSumRecord.Checksum
-	// - Not ok: return err checksum does not match
-	// - ok: update LastChecksumDate & Msg ("ok"), PutChecksumRecord, Schedule next check
+	if checksumResult != checksumRecord.Checksum {
+		log.Printf("Checksum mismatch. Have %s, expected %s", checksumResult, checksumRecord.Checksum)
+		checksumRecord.LastChecksumMessage = "checksum mismatch"
+		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+		if err != nil {
+			log.Printf("Failed to record failed checksum in db due to : %v", err)
+			return err
+		}
+		return errors.New("checksum does not match")
+	} else {
+		checksumRecord.LastChecksumSuccess = true
+		checksumRecord.LastChecksumMessage = "ok"
+	}
+
+	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	if err != nil {
+		log.Printf("Failed to record successful checksum in db due to : %v", err)
+		return err
+	}
 
 	return nil
 }
