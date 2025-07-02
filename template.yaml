@@ -689,7 +689,7 @@ Resources:
                   - s3:ReplicateDelete
                   - s3:ReplicateTags
                 Resource:
-                  - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
+                  - !Sub "arn:aws:s3:::${AWS::StackName}*-repl/*"
 
   LambdaBucketRequestInvokePermission:
     Type: AWS::Lambda::Permission
@@ -947,15 +947,15 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::${AWS::StackName}*-managed"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-managed/*"
-          # View only permissions on stack name prefixed buckets suffixed with "-replication"
+          # View only permissions on stack name prefixed buckets suffixed with "-repl"
           - Effect: Deny
             Action:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
             Resource:
-              - !Sub "arn:aws:s3:::${AWS::StackName}*-replication"
-              - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-repl"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-repl/*"
           # Deny all on stack name prefixed buckets suffixed with "-logs"
           - Effect: Deny
             Action:
@@ -1009,15 +1009,15 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::${AWS::StackName}*-managed"
               - !Sub "arn:aws:s3:::${AWS::StackName}*-managed/*"
-          # View only permissions on stack name prefixed buckets suffixed with "-replication"
+          # View only permissions on stack name prefixed buckets suffixed with "-repl"
           - Effect: Deny
             Action:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
             Resource:
-              - !Sub "arn:aws:s3:::${AWS::StackName}*-replication"
-              - !Sub "arn:aws:s3:::${AWS::StackName}*-replication/*"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-repl"
+              - !Sub "arn:aws:s3:::${AWS::StackName}*-repl/*"
           # Deny all on stack name prefixed buckets suffixed with "-logs"
           - Effect: Deny
             Action:
