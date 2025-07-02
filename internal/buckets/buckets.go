@@ -350,6 +350,14 @@ func EnableVersioning(ctx context.Context, s3Client *s3.Client, bucketName strin
 	return nil
 }
 
+func GetBucketPrefix(bucketName string) string {
+	parts := strings.Split(bucketName, "-")
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts[:2], "-")
+}
+
 func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
 	maxBuckets, err := strconv.Atoi(bucketsPerRequest)
 

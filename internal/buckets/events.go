@@ -16,6 +16,10 @@ func (w *S3EventWrapper) BucketName() string {
 	return w.firstRecord().S3.Bucket.Name
 }
 
+func (w *S3EventWrapper) BucketPrefix() string {
+	return GetBucketPrefix(w.BucketName())
+}
+
 // ObjectKey extracts the object key
 func (w *S3EventWrapper) ObjectKey() string {
 	return w.firstRecord().S3.Object.Key
