@@ -320,3 +320,86 @@ func TestBucketNameMaxLengthWithReplicationSuffix(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBucketPrefix(t *testing.T) {
+	tests := []struct {
+		name       string
+		bucketName string
+		expected   string
+	}{
+		{
+			name:       "Standard bucket name with multiple segments",
+			bucketName: "my-bucket-test-data",
+			expected:   "my-bucket",
+		},
+		{
+			name:       "Standard bucket name with numeric indicator",
+			bucketName: "my-bucket2-test-data",
+			expected:   "my-bucket2",
+		},
+		{
+			name:       "Bucket name with exactly two segments",
+			bucketName: "prod-storage",
+			expected:   "prod-storage",
+		},
+		{
+			name:       "Bucket name with single segment - no dash",
+			bucketName: "singlebucket",
+			expected:   "",
+		},
+		{
+			name:       "Bucket name with many segments",
+			bucketName: "company-prod-us-east-1-backup-data",
+			expected:   "company-prod",
+		},
+		{
+			name:       "Bucket name starting with dash",
+			bucketName: "-bucket-name",
+			expected:   "-bucket",
+		},
+		{
+			name:       "Bucket name ending with dash",
+			bucketName: "bucket-name-",
+			expected:   "bucket-name",
+		},
+		{
+			name:       "Empty bucket name",
+			bucketName: "",
+			expected:   "",
+		},
+		{
+			name:       "Bucket name with only dashes",
+			bucketName: "---",
+			expected:   "-",
+		},
+		{
+			name:       "Bucket name with consecutive dashes",
+			bucketName: "bucket--with--double--dashes",
+			expected:   "bucket-",
+		},
+		{
+			name:       "Bucket name with numeric segments",
+			bucketName: "bucket-123-456-789",
+			expected:   "bucket-123",
+		},
+		{
+			name:       "Real world example from create-buckets.txt",
+			bucketName: "pilot-ex-testing123",
+			expected:   "pilot-ex",
+		},
+		{
+			name:       "Real world example with public suffix",
+			bucketName: "pilot-ex-testing789-public",
+			expected:   "pilot-ex",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetBucketPrefix(tt.bucketName)
+			if result != tt.expected {
+				t.Errorf("GetBucketPrefix(%q) = %q, want %q", tt.bucketName, result, tt.expected)
+			}
+		})
+	}
+}

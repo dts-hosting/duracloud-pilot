@@ -308,6 +308,7 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
           FileDeletedUseExternalImage,
@@ -352,6 +353,7 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+          S3_BUCKET_PREFIX: !Sub "${AWS::StackName}"
       ImageUri:
         !If [
           FileUploadedUseExternalImage,
@@ -587,7 +589,7 @@ Resources:
         detail:
           bucket:
             name:
-              - prefix: !Sub "${AWS::StackName}"
+              - prefix: !Sub "${AWS::StackName}-"
       Targets:
         - Arn: !GetAtt SQSObjectCreated.Arn
           Id: "SendToSQSOnCreate"
@@ -604,7 +606,7 @@ Resources:
         detail:
           bucket:
             name:
-              - prefix: !Sub "${AWS::StackName}"
+              - prefix: !Sub "${AWS::StackName}-"
       Targets:
         - Arn: !GetAtt SQSObjectDeleted.Arn
           Id: "SendToSQSOnDelete"

@@ -22,6 +22,7 @@ import (
 )
 
 var (
+	bucketPrefix   string
 	checksumTable  string
 	dynamodbClient *dynamodb.Client
 	s3Client       *s3.Client
@@ -39,6 +40,7 @@ func init() {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
 
+	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
 	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
@@ -59,6 +61,10 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
 
 	for _, parsedEvent := range parsedEvents {
+		if parsedEvent.BucketPrefix() != bucketPrefix {
+			continue
+		}
+
 		if !parsedEvent.IsObjectCreated() || parsedEvent.IsIgnoreFilesBucket() {
 			continue
 		}

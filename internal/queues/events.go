@@ -37,6 +37,11 @@ func (e *S3EventBridgeEvent) BucketName() string {
 	return e.Detail.Bucket.Name
 }
 
+// BucketPrefix returns the first two segments of the bucket name, rejoined
+func (w *S3EventBridgeEvent) BucketPrefix() string {
+	return buckets.GetBucketPrefix(w.BucketName())
+}
+
 // Etag extracts the object etag
 func (e *S3EventBridgeEvent) Etag() string {
 	return e.Detail.Object.Etag
