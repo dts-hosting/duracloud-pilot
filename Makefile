@@ -62,6 +62,11 @@ file-copy: ## Copy a file to a bucket (without prefixes)
 file-delete: ## Delete a file from a bucket (without prefixes)
 	@aws s3 rm s3://$(bucket)/$(file)
 
+.PHONY: guidelines
+guidelines: ## Copy the guidelines into LLM favored locations
+	@mkdir -p .junie
+	@cp guidelines.md CLAUDE.md && cp guidelines.md .junie/
+
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)

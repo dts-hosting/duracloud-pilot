@@ -2,10 +2,12 @@
 .aws-sam
 .env*
 .idea
+.junie
 .sam-translate/
 .vscode/settings.json
 *.html
 buckets.txt
+CLAUDE.md
 dist
 docs/
 !docs-src/src/content/docs/
