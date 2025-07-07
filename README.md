@@ -1,125 +1,108 @@
 # DuraCloud (pilot)
 
-Requires:
+DuraCloud is a serverless application built using AWS SAM that provides robust file storage management with built-in data integrity verification through checksums.
 
-- [AWS cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-- [AWS sam](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+## Documentation
+
+- [Technical Documentation](technical-documentation.md) - Comprehensive overview of the system architecture, components, workflows, and security model
+- [Developer Guidelines](guidelines.md) - Detailed information for developers working on the project
+
+## Prerequisites
+
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
 - [Docker](https://docs.docker.com/engine/install/)
 - [Go](https://go.dev/doc/install)
+- [Node.js](https://nodejs.org/en) (for documentation site)
 
-To view logs install `saw` (using Go is recommended):
+## Quick Start
+
+1. Configure AWS credentials (via profile or environment variables)
+
+2. Create a `.env` file with your stack name:
+
+```
+STACK_NAME=your-stack-name
+```
+
+3. Build and deploy:
 
 ```bash
-go install github.com/TylerBrock/saw@latest
+make pull
+make build
+make deploy stack=your-stack-name
 ```
 
-The docs site requires [Node.js](https://nodejs.org/en). Install using `nvm`:
-
-- [nvm](https://github.com/nvm-sh/nvm)
+4. Get test user credentials:
 
 ```bash
-nvm install
-nvm use
-make docs-install
+make creds stack=your-stack-name
 ```
 
-## Usage
-
-Export a profile or otherwise configure AWS credentials. One option is to
-create a `.env` file and add AWS environment variables to it:
-
-```txt
-AWS_PROFILE=default
-```
-
-That's all the setup needed for using the provided `make` tasks.
+5. To clean up:
 
 ```bash
-make pull # download the required docker images
-make build # prebuild images
-
-# deploy
-make deploy stack=duracloud-lyrasis
-
-# get the support user access key and secret
-make creds stack=duracloud-lyrasis
-
-# destroy
-make cleanup stack=duracloud-lyrasis
-make delete stack=duracloud-lyrasis
+make cleanup stack=your-stack-name
+make delete stack=your-stack-name
 ```
 
-- Setting `stack` uniquely allows for multiple deployments to the same account.
-- Created resources are prefixed with the `stack` name.
+> **Note**: Setting `stack` uniquely allows for multiple deployments to the same account. Created resources are prefixed with the `stack` name.
 
-## Workflow testing
+For detailed build and configuration instructions, see the [Developer Guidelines](guidelines.md).
+
+## Common Tasks
+
+### Testing Workflows
 
 ```bash
-# trigger: bucket creation function
-make file-copy file=files/create-buckets.txt bucket=duracloud-lyrasis-bucket-requested
-make bucket action=list # list buckets, should shortly have the newly created ones
+# Create buckets
+make file-copy file=files/create-buckets.txt bucket=your-stack-name-bucket-requested
 
-# trigger: file uploaded function
-make file-copy file=files/upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
+# Upload a file
+make file-copy file=files/upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
-# trigger: checksum verification
-make expire-ttl stack=duracloud-lyrasis file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
+# Trigger checksum verification
+make expire-ttl stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
-# trigger: checksum failure notification
-# TODO: set checksum status false (message = "forcibly induced error") for an item
-
-# trigger: file deleted function
-make file-delete file=upload-me.txt bucket=duracloud-lyrasis-pilot-ex-testing123
+# Delete a file
+make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 ```
 
-To view logs:
+### Viewing Logs
 
 ```bash
-# output logs (optional: interval=30m, default is 5m)
-make logs func=BucketRequestedFunction stack=duracloud-lyrasis
+make logs func=BucketRequestedFunction stack=your-stack-name interval=5m
 ```
 
-## Utility tasks
-
-The `make bucket` task can be used to create, clear and delete buckets:
+### Managing Buckets
 
 ```bash
 make bucket action=list
-make bucket action=create bucket=duracloud-lyrasis-tmp
-make bucket action=empty bucket=duracloud-lyrasis-tmp
-make bucket action=delete bucket=duracloud-lyrasis-tmp
+make bucket action=create bucket=your-stack-name-tmp
+make bucket action=empty bucket=your-stack-name-tmp
+make bucket action=delete bucket=your-stack-name-tmp
 ```
 
-The `make invoke` task can be used to run functions locally:
+### Running Functions
+
+Locally:
 
 ```bash
 make invoke func=FileUploadedFunction event=events/file-uploaded/event.json
-make invoke func=FileDeletedFunction event=events/file-deleted/event.json
-make invoke func=ChecksumVerificationFunction event=events/checksum-verification/event.json
-make invoke func=ChecksumFailureFunction event=events/checksum-failure/event.json
-make invoke func=ChecksumExporterFunction event=events/checksum-exporter/event.json
 ```
 
-However, results will vary depending on how strongly the function depends on
-deployed resources. In most cases this is only useful for debugging the initial
-configuration and event payloads.
-
-The `make invoke-remote` task can be used to run deployed functions:
+Remotely:
 
 ```bash
-make invoke-remote func=ChecksumExporterFunction event=events/checksum-exporter/event.json stack=duracloud-lyrasis
+make invoke-remote func=ChecksumExporterFunction event=events/checksum-exporter/event.json stack=your-stack-name
 ```
 
-To see the status of an export:
+### Running Tests
 
 ```bash
-AWS_PROFILE=$PROFILE aws dynamodb describe-export --export-arn $ARN
+make test stack=your-stack-name
 ```
 
-## Tests
+For detailed information about testing, debugging, and development practices, see the [Developer Guidelines](guidelines.md).
 
-The stack indicated by `STACK_NAME` must be deployed first.
-
-```bash
-make test stack=duracloud-lyrasis
-```
+For comprehensive system architecture and component details, see the [Technical Documentation](technical-documentation.md).
