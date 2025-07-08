@@ -89,6 +89,11 @@ func assertBucketsNotExist(t *testing.T, ctx context.Context, s3Client *s3.Clien
 	}
 }
 
+func assertFileUploadSuccess(t *testing.T, ctx context.Context, s3Client *s3.Client, stackName string, testBucket string) {
+	testBucketName := fmt.Sprintf("%s-%s", stackName, testBucket)
+	assert.True(t, uploadFile(t, ctx, s3Client, testBucketName), "Uploaded file should exist")
+}
+
 func bucketExists(ctx context.Context, s3Client *s3.Client, bucketName string) bool {
 	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(bucketName),
@@ -277,6 +282,13 @@ func lambdaFunctionExists(ctx context.Context, lambdaClient *lambda.Client, func
 	_, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
 		FunctionName: aws.String(functionName),
 	})
+	return err == nil
+}
+
+func uploadFile(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName string) bool {
+	t.Logf("Uploading: s3://%s/%s", bucketName, "test-file.txt")
+	err := uploadToS3(ctx, s3Client, bucketName, "test-file.txt", "test file content")
+	require.NoError(t, err, "Should upload test file")
 	return err == nil
 }
 
