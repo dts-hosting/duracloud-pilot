@@ -71,7 +71,7 @@ make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 ### Viewing Logs
 
 ```bash
-make logs func=BucketRequestedFunction stack=your-stack-name interval=5m
+make logs func=checksum-verification stack=your-stack-name interval=5m
 ```
 
 ### Managing Buckets

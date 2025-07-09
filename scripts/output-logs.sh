@@ -4,7 +4,7 @@
 # Check if function and stack name were provided
 if [ -z "$1" ] || [ -z "$2" ]; then
   echo "Usage: $0 <function-name> <stack-name>"
-  echo "Example: $0 BucketRequestedFunction duracloud-lyrasis"
+  echo "Example: $0 checksum-verification duracloud-lyrasis"
   exit 1
 fi
 
