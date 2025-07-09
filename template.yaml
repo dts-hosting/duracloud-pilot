@@ -256,6 +256,8 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+          SNS_TOPIC_ARN: !Ref SNSEmailAlertTopic
+          STACK_NAME: !Ref AWS::StackName
       ImageUri:
         !If [
           ChecksumVerificationUseExternalImage,
@@ -281,6 +283,7 @@ Resources:
                 - dynamodb:Scan
               Resource:
                 - !GetAtt DynamoDBChecksumTable.Arn
+                - !GetAtt DynamoDBChecksumSchedulerTable.Arn
             - Effect: Allow
               Action:
                 - dynamodb:DescribeStream
@@ -289,6 +292,10 @@ Resources:
                 - dynamodb:ListStreams
               Resource:
                 - !GetAtt DynamoDBChecksumSchedulerTable.StreamArn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref SNSEmailAlertTopic
       Timeout: 900
 
   FileDeletedFunction:

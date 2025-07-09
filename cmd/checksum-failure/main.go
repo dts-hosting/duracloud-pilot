@@ -90,7 +90,7 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			Date:         record.Change.ApproximateCreationDateTime.String(),
 			ErrorMessage: errorMessage,
 			Stack:        stackName,
-			Title:        fmt.Sprintf("DuraCloud Checksum Failure: %s/%s", bucket, object),
+			Title:        fmt.Sprintf("DuraCloud Checksum Verification Failure: %s/%s", bucket, object),
 			Template:     notificationTmpl,
 			Topic:        snsTopicArn,
 		}

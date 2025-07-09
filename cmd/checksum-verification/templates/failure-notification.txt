@@ -1,0 +1,16 @@
+Checksum verification processing was not completed for:
+
+Account: {{.Account}}
+Stack: {{.Stack}}
+Time: {{.Date}}
+
+Bucket: {{.Bucket}}
+Object: {{.Object}}
+Error: {{.ErrorMessage}}
+
+If the error message is inconclusive, it could mean:
+
+- There was an error determining the next checksum verification date
+- There was an error accessing the checksum record from the database
+- There was an error writing the checksum result back to the database
+- There was an error writing the next scheduled check to the database
