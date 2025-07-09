@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"duracloud/internal/accounts"
 	"duracloud/internal/checksum"
 	"duracloud/internal/db"
 	"duracloud/internal/files"
-	"errors"
+	"duracloud/internal/notifications"
+	_ "embed"
 	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -14,16 +16,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"log"
 	"os"
+	"text/template"
 	"time"
 )
 
 var (
-	checksumTable  string
-	dynamodbClient *dynamodb.Client
-	s3Client       *s3.Client
-	schedulerTable string
+	//go:embed templates/failure-notification.txt
+	notificationTemplate string
+
+	accountID        string
+	checksumTable    string
+	dynamodbClient   *dynamodb.Client
+	notificationTmpl *template.Template
+	s3Client         *s3.Client
+	schedulerTable   string
+	snsClient        *sns.Client
+	snsTopicArn      string
+	stackName        string
 )
 
 func init() {
@@ -37,13 +49,23 @@ func init() {
 		log.Fatalf("Unable to load AWS config: %v", err)
 	}
 
+	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
+	if err != nil {
+		log.Fatalf("Unable to get AWS account ID: %v", err)
+	}
+
+	notificationTmpl, err = template.New("notification").Parse(notificationTemplate)
+	if err != nil {
+		log.Fatalf("Failed to parse notification template: %v", err)
+	}
+
 	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")
 	dynamodbClient = dynamodb.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
 	schedulerTable = os.Getenv("DYNAMODB_SCHEDULER_TABLE")
-
-	// tmp
-	fmt.Println(schedulerTable)
+	snsClient = sns.NewFromConfig(awsConfig)
+	snsTopicArn = os.Getenv("SNS_TOPIC_ARN")
+	stackName = os.Getenv("STACK_NAME")
 }
 
 func handler(ctx context.Context, event events.DynamoDBEvent) error {
@@ -60,8 +82,24 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 
 		err = processChecksumVerification(ctx, s3Client, dynamodbClient, obj, checksumTable, schedulerTable)
 		if err != nil {
-			log.Printf("failed to process checksum verification: %s", err.Error())
-			// TODO: put checksum record failure
+			// This isn't about whether the checksum verification succeeded or failed,
+			// rather it indicates we failed to access or update the database about it or schedule the next check
+			log.Printf("failure processing checksum verification: %s", err.Error())
+			notification := notifications.ChecksumFailureNotification{
+				Account:      accountID,
+				Bucket:       obj.Bucket,
+				Object:       obj.Key,
+				Date:         time.Now().Format(time.RFC3339),
+				ErrorMessage: err.Error(),
+				Stack:        stackName,
+				Title:        fmt.Sprintf("DuraCloud Checksum Processing Failure: %s/%s", obj.Bucket, obj.Key),
+				Template:     notificationTmpl,
+				Topic:        snsTopicArn,
+			}
+
+			if err := notifications.SendNotification(ctx, snsClient, notification); err != nil {
+				log.Printf("Failed to send checksum failure notification: %v", err)
+			}
 			continue
 		}
 	}
@@ -110,48 +148,38 @@ func processChecksumVerification(
 	if err != nil {
 		return err
 	}
+
 	checksumRecord.LastChecksumDate = currentTime
 	checksumRecord.NextChecksumDate = nextScheduledTime
-	checksumRecord.LastChecksumSuccess = false
 
 	calc := checksum.NewS3Calculator(s3Client)
 	checksumResult, err := calc.CalculateChecksum(ctx, obj)
 	if err != nil {
 		checksumRecord.LastChecksumMessage = err.Error()
-		// TODO: do we want to use checksumResult.Checksum to record it?
-		checksumRecord.Checksum = ""
-
-		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
-		if err != nil {
-			log.Printf("Failed to record failed checksum in db due to : %v", err)
-			return err
-		}
-
-		return err
-	}
-
-	// TODO: remove these temporary logging statements
-	log.Printf("Calculated checksum: %s", checksumResult)
-	log.Printf("Checksum record: %v", checksumRecord)
-
-	if checksumResult != checksumRecord.Checksum {
-		log.Printf("Checksum mismatch. Have %s, expected %s", checksumResult, checksumRecord.Checksum)
-		checksumRecord.LastChecksumMessage = "checksum mismatch"
-		err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
-		if err != nil {
-			log.Printf("Failed to record failed checksum in db due to : %v", err)
-			return err
-		}
-		return errors.New("checksum does not match")
+		checksumRecord.LastChecksumSuccess = false
+	} else if checksumResult != checksumRecord.Checksum {
+		msg := fmt.Sprintf("Checksum mismatch: calculated=%s, stored=%s", checksumResult, checksumRecord.Checksum)
+		log.Println(msg)
+		checksumRecord.LastChecksumMessage = msg
+		checksumRecord.LastChecksumSuccess = false
 	} else {
-		checksumRecord.LastChecksumSuccess = true
+		// Technically this is redundant but included for clarity
 		checksumRecord.LastChecksumMessage = "ok"
+		checksumRecord.LastChecksumSuccess = true
 	}
 
 	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
 	if err != nil {
-		log.Printf("Failed to record successful checksum in db due to : %v", err)
+		log.Printf("Failed to update checksum record due to : %v", err)
 		return err
+	}
+
+	if checksumRecord.LastChecksumSuccess {
+		log.Printf("Checksum verification succeeded for: %s/%s", obj.Bucket, obj.Key)
+		err = db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

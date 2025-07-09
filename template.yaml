@@ -256,6 +256,8 @@ Resources:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           DYNAMODB_SCHEDULER_TABLE: !Ref DynamoDBChecksumSchedulerTable
+          SNS_TOPIC_ARN: !Ref SNSEmailAlertTopic
+          STACK_NAME: !Ref AWS::StackName
       ImageUri:
         !If [
           ChecksumVerificationUseExternalImage,
