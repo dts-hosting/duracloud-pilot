@@ -283,6 +283,7 @@ Resources:
                 - dynamodb:Scan
               Resource:
                 - !GetAtt DynamoDBChecksumTable.Arn
+                - !GetAtt DynamoDBChecksumSchedulerTable.Arn
             - Effect: Allow
               Action:
                 - dynamodb:DescribeStream
@@ -291,6 +292,10 @@ Resources:
                 - dynamodb:ListStreams
               Resource:
                 - !GetAtt DynamoDBChecksumSchedulerTable.StreamArn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref SNSEmailAlertTopic
       Timeout: 900
 
   FileDeletedFunction:
