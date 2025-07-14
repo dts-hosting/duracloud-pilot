@@ -21,6 +21,10 @@ bucket: ## Run a bucket manager script command
 build: ## Build the project (images, artifacts, etc.)
 	@sam build --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH) && sam validate
 
+.PHONY: checksum-fail
+checksum-fail: ## Force a checksum failure (stack=name bucket=name file=key)
+	@./scripts/checksum-fail.sh $(stack) $(bucket) $(file)
+
 .PHONY: cleanup
 cleanup: ## Cleanup remote bucket and table resources for a stack
 	@./scripts/cleanup-stack.sh $(stack)
