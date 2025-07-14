@@ -58,13 +58,16 @@ For detailed build and configuration instructions, see the [Developer Guidelines
 # Create buckets
 make file-copy file=files/create-buckets.txt bucket=your-stack-name-bucket-requested
 
-# Upload a file
+# Upload a file (adds record to checksum and scheduler tables)
 make file-copy file=files/upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
 # Trigger checksum verification
 make expire-ttl stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
-# Delete a file
+# Force a checksum failure
+make checksum-fail stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
+
+# Delete a file (removes record from checksum and scheduler tables)
 make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 ```
 
