@@ -190,6 +190,52 @@ Resources:
               Resource: !GetAtt S3ManagedBucket.Arn
       Timeout: 900
 
+  ChecksumExportCSVReportFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: checksum-export-csv-report
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-checksum-export-csv-report"
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ChecksumExportCSVReportFunction"
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that writes CSV Reports of DynamoDB table exports
+      Environment:
+        Variables:
+          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+      ImageUri:
+        !If [
+          ChecksumExporterUseExternalImage,
+          !Ref ChecksumExporterImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      LoggingConfig:
+        LogGroup: !Ref LogsChecksumExportCSVReportFunction
+      MemorySize: 256
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            # S3 permissions for export destination
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:AbortMultipartUpload
+                - s3:ListBucketMultipartUploads
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !Sub "${S3ManagedBucket.Arn}/exports/*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !GetAtt S3ManagedBucket.Arn
+      Timeout: 900
+
   ChecksumFailureFunction:
     Type: AWS::Serverless::Function
     Metadata:
