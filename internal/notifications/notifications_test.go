@@ -1,23 +1,20 @@
 package notifications
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"text/template"
 )
 
 func TestChecksumFailureNotificationMessage(t *testing.T) {
-	templateContent := `Checksum verification failed for:
+	templatePath := filepath.Join("..", "..", "cmd", "checksum-failure", "templates", "failure-notification.txt")
+	templateBytes, err := os.ReadFile(templatePath)
+	if err != nil {
+		t.Fatalf("Failed to read template file: %v", err)
+	}
 
-Account: {{.Account}}
-Stack: {{.Stack}}
-Time: {{.Date}}
-
-Bucket: {{.Bucket}}
-Object: {{.Object}}
-Error: {{.ErrorMessage}}
-`
-
-	tmpl, err := template.New("test").Parse(templateContent)
+	tmpl, err := template.New("test").Parse(string(templateBytes))
 	if err != nil {
 		t.Fatalf("Failed to parse template: %v", err)
 	}
