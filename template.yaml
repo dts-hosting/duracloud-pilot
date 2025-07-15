@@ -633,6 +633,16 @@ Resources:
         - Arn: !GetAtt ChecksumExporterFunction.Arn
           Id: "ChecksumExporterTarget"
 
+  EventsChecksumExportCSVReportSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger monthly DynamoDB checksum table CSV reports"
+      ScheduleExpression: "cron(0 9 1 * ? *)" # 1st day of month at 9 AM UTC (3 hours after JSON exports generated)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ChecksumExportCSVReportFunction.Arn
+          Id: "ChecksumExportCSVReportTarget"
+
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
