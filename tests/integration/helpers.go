@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -22,9 +23,10 @@ import (
 )
 
 type TestClients struct {
-	S3     *s3.Client
-	Lambda *lambda.Client
-	IAM    *iam.Client
+	S3       *s3.Client
+	Lambda   *lambda.Client
+	IAM      *iam.Client
+	DynamoDB *dynamodb.Client
 }
 
 func setupTestClients(t *testing.T) (*TestClients, string) {
@@ -41,9 +43,10 @@ func setupTestClients(t *testing.T) (*TestClients, string) {
 	}
 
 	return &TestClients{
-		S3:     s3.NewFromConfig(awsConfig),
-		Lambda: lambda.NewFromConfig(awsConfig),
-		IAM:    iam.NewFromConfig(awsConfig),
+		S3:       s3.NewFromConfig(awsConfig),
+		Lambda:   lambda.NewFromConfig(awsConfig),
+		IAM:      iam.NewFromConfig(awsConfig),
+		DynamoDB: dynamodb.NewFromConfig(awsConfig),
 	}, stackName
 }
 
@@ -89,9 +92,8 @@ func assertBucketsNotExist(t *testing.T, ctx context.Context, s3Client *s3.Clien
 	}
 }
 
-func assertFileUploadSuccess(t *testing.T, ctx context.Context, s3Client *s3.Client, stackName string, testBucket string) {
-	testBucketName := fmt.Sprintf("%s-%s", stackName, testBucket)
-	assert.True(t, uploadFile(t, ctx, s3Client, testBucketName), "Uploaded file should exist")
+func assertFileUploadSuccess(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName string, fileName string, content string) {
+	assert.True(t, uploadFile(t, ctx, s3Client, bucketName, fileName), content)
 }
 
 func bucketExists(ctx context.Context, s3Client *s3.Client, bucketName string) bool {
@@ -173,12 +175,17 @@ func generateUniqueBucketNames(baseName string, count int, suffix string) []stri
 	var bucketsNames []string
 
 	for i := 0; i < count; i++ {
-		uid := uuid.New().String()[:12]
+		uid := generateUniqueString()
 		bucketName := fmt.Sprintf("%s-%s%s", baseName, uid, suffix)
 		bucketsNames = append(bucketsNames, bucketName)
 	}
 
 	return bucketsNames
+}
+
+func generateUniqueString() string {
+	uid := uuid.New().String()[:12]
+	return uid
 }
 
 func getBucketInventory(ctx context.Context, s3Client *s3.Client, bucketName string) []types.InventoryConfiguration {
@@ -271,6 +278,25 @@ func getBucketVersioning(ctx context.Context, s3Client *s3.Client, bucketName st
 	return string(result.Status)
 }
 
+func getChecksumTable(t *testing.T) string {
+	checksumTable := os.Getenv("DYNAMODB_CHECKSUM_TABLE")
+	if checksumTable == "" {
+		t.Fatal("DYNAMODB_CHECKSUM_TABLE environment variable must be set")
+	}
+	return checksumTable
+}
+
+func getTestBucketName(stackName string, testBucket string) string {
+	testBucketName := fmt.Sprintf("%s-%s", stackName, testBucket)
+	return testBucketName
+}
+
+func getTestFileName(stackName string) string {
+	uid := generateUniqueString()
+	testFileName := fmt.Sprintf("%s-%s", stackName, uid)
+	return testFileName
+}
+
 func iamRoleExists(ctx context.Context, iamClient *iam.Client, roleName string) bool {
 	_, err := iamClient.GetRole(ctx, &iam.GetRoleInput{
 		RoleName: aws.String(roleName),
@@ -285,7 +311,7 @@ func lambdaFunctionExists(ctx context.Context, lambdaClient *lambda.Client, func
 	return err == nil
 }
 
-func uploadFile(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName string) bool {
+func uploadFile(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName string, fileName string) bool {
 	t.Logf("Uploading: s3://%s/%s", bucketName, "test-file.txt")
 	err := uploadToS3(ctx, s3Client, bucketName, "test-file.txt", "test file content")
 	require.NoError(t, err, "Should upload test file")
@@ -417,6 +443,10 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		assert.True(t, foundType, "Should have BucketType tag")
 		assert.True(t, foundStack, "Should have StackName tag")
 	})
+}
+
+func waitForEventBridgeProcessing(duration time.Duration) {
+	time.Sleep(duration)
 }
 
 func waitForLambdaProcessing(duration time.Duration) {
