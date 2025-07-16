@@ -5,13 +5,13 @@ import (
 	"duracloud/internal/db"
 	"duracloud/internal/files"
 	"fmt"
-	//"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
 
-const checksumGenerationWaitTime = 240 * time.Second
+const checksumGenerationWaitTime = 120 * time.Second
 
 func TestFileUploadedAndChecksumVerificationSuccess(t *testing.T) {
 
@@ -21,6 +21,7 @@ func TestFileUploadedAndChecksumVerificationSuccess(t *testing.T) {
 	testFileName := "checksum-it.txt"
 	requestFileName := "checksum-it-bucket-request.txt"
 	testBucketName := "checksum-it"
+	testChecksum := "e9309ee2f26c56636574c93cb74c951c"
 	fullTestBucketName := fmt.Sprintf("%s-%s", stackName, testBucketName)
 	requestBucketName := fmt.Sprintf("%s-bucket-requested", stackName)
 	//testBuckets := []string{testBucketName}
@@ -41,9 +42,8 @@ func TestFileUploadedAndChecksumVerificationSuccess(t *testing.T) {
 		obj := files.NewS3Object(fullTestBucketName, testFileName)
 		checksumTableName := fmt.Sprintf("%s-checksum-table", stackName)
 		checksumRecord, err := db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTableName, obj)
-		if err != nil {
-			t.Logf("Error getting checksum record: %v", err)
-		}
+		require.NoError(t, err, "Should retrieve checksum for test file")
+		assert.Equal(t, testChecksum, checksumRecord.Checksum, "Checksum should match")
 		t.Logf("checksum record for %v", checksumRecord)
 	})
 }
