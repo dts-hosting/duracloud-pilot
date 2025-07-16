@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -22,9 +23,10 @@ import (
 )
 
 type TestClients struct {
-	S3     *s3.Client
-	Lambda *lambda.Client
-	IAM    *iam.Client
+	S3       *s3.Client
+	Lambda   *lambda.Client
+	IAM      *iam.Client
+	DynamoDB *dynamodb.Client
 }
 
 func setupTestClients(t *testing.T) (*TestClients, string) {
@@ -41,9 +43,10 @@ func setupTestClients(t *testing.T) (*TestClients, string) {
 	}
 
 	return &TestClients{
-		S3:     s3.NewFromConfig(awsConfig),
-		Lambda: lambda.NewFromConfig(awsConfig),
-		IAM:    iam.NewFromConfig(awsConfig),
+		S3:       s3.NewFromConfig(awsConfig),
+		Lambda:   lambda.NewFromConfig(awsConfig),
+		IAM:      iam.NewFromConfig(awsConfig),
+		DynamoDB: dynamodb.NewFromConfig(awsConfig),
 	}, stackName
 }
 
@@ -405,6 +408,9 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		assert.True(t, foundType, "Should have BucketType tag")
 		assert.True(t, foundStack, "Should have StackName tag")
 	})
+}
+func waitForEventBridgeProcessing(duration time.Duration) {
+	time.Sleep(duration)
 }
 
 func waitForLambdaProcessing(duration time.Duration) {
