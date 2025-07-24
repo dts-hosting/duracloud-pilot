@@ -15,6 +15,8 @@ import (
 )
 
 func TestChecksumVerification(t *testing.T) {
+	t.Parallel()
+
 	_, stackName := setupTestClients(t)
 	testBucket := fmt.Sprintf("%s-managed", stackName)
 

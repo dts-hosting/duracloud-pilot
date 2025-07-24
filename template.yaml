@@ -413,6 +413,8 @@ Resources:
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
+  # TODO: CloudWatchChecksumVerificationFunctionErrorAlarm
+
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
