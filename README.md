@@ -19,10 +19,10 @@ DuraCloud is a serverless application built using AWS SAM that provides robust f
 
 1. Configure AWS credentials (via profile or environment variables)
 
-2. Create a `.env` file with your stack name:
+2. Create a `.env` file with your AWS profile:
 
 ```
-STACK_NAME=your-stack-name
+STACK_NAME=your-profile-name
 ```
 
 3. Build and deploy:

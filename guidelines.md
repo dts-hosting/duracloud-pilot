@@ -17,7 +17,7 @@ This document provides essential information for developers working on the DuraC
 1. Create a `.env` file in the project root with required environment variables:
 
 ```
-STACK_NAME=your-stack-name
+AWS_PROFILE=your-profile-name
 ```
 
 2. Pull required Docker images:
