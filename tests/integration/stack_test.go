@@ -10,6 +10,8 @@ import (
 )
 
 func TestStackDeployment(t *testing.T) {
+	t.Parallel()
+
 	clients, stackName := setupTestClients(t)
 	ctx := context.Background()
 

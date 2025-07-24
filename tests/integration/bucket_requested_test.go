@@ -16,7 +16,6 @@ func TestBucketCreationSuccess(t *testing.T) {
 
 	t.Run("WithStandardBuckets", func(t *testing.T) {
 		t.Parallel()
-		time.Sleep(0 * time.Second)
 
 		clients, stackName, testBuckets, ctx := setupBucketTest(t, 2, "")
 
@@ -33,7 +32,6 @@ func TestBucketCreationSuccess(t *testing.T) {
 
 	t.Run("WithPublicBucket", func(t *testing.T) {
 		t.Parallel()
-		time.Sleep(2 * time.Second)
 
 		clients, stackName, testBuckets, ctx := setupBucketTest(t, 1, "-public")
 
@@ -54,7 +52,6 @@ func TestBucketCreationFailure(t *testing.T) {
 
 	t.Run("WithInvalidNames", func(t *testing.T) {
 		t.Parallel()
-		time.Sleep(4 * time.Second)
 
 		clients, stackName, testBuckets, ctx := setupBucketTest(t, 2, "_not@allowed")
 
@@ -64,7 +61,6 @@ func TestBucketCreationFailure(t *testing.T) {
 
 	t.Run("WithTooManyNames", func(t *testing.T) {
 		t.Parallel()
-		time.Sleep(6 * time.Second)
 
 		clients, stackName, testBuckets, ctx := setupBucketTest(t, 6, "")
 
