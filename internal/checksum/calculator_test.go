@@ -234,6 +234,58 @@ func TestS3Calculator_LargeFile(t *testing.T) {
 	}
 }
 
+func TestS3Calculator_GetAdaptiveBufferSize(t *testing.T) {
+	tests := []struct {
+		name         string
+		fileSize     int64
+		expectedSize int
+	}{
+		{
+			name:         "small file (500KB)",
+			fileSize:     500 * 1024,
+			expectedSize: 64 * 1024, // 64KB
+		},
+		{
+			name:         "exactly 1MB",
+			fileSize:     1024 * 1024,
+			expectedSize: 512 * 1024, // 512KB
+		},
+		{
+			name:         "medium file (50MB)",
+			fileSize:     50 * 1024 * 1024,
+			expectedSize: 512 * 1024, // 512KB
+		},
+		{
+			name:         "exactly 100MB",
+			fileSize:     100 * 1024 * 1024,
+			expectedSize: 2 * 1024 * 1024, // 2MB
+		},
+		{
+			name:         "large file (1GB)",
+			fileSize:     1024 * 1024 * 1024,
+			expectedSize: 2 * 1024 * 1024, // 2MB
+		},
+		{
+			name:         "empty file",
+			fileSize:     0,
+			expectedSize: 64 * 1024, // 64KB
+		},
+	}
+
+	mockClient := newMockS3Client()
+	calc := NewS3Calculator(mockClient)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := calc.getAdaptiveBufferSize(tt.fileSize)
+			if result != tt.expectedSize {
+				t.Errorf("buffer size mismatch for %d bytes: expected %d, got %d",
+					tt.fileSize, tt.expectedSize, result)
+			}
+		})
+	}
+}
+
 func TestS3Object_URI(t *testing.T) {
 	obj := files.NewS3Object("my-bucket", "path/to/file.txt")
 	expected := "s3://my-bucket/path/to/file.txt"

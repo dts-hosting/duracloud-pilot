@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	BufferSize  = 2 * 1024 * 1024
 	MaxFileSize = 20 * 1024 * 1024 * 1024 // 20GB maximum file size (Lambda consideration)
 )
 
@@ -29,7 +28,6 @@ type S3ClientInterface interface {
 type S3Calculator struct {
 	s3Client   S3ClientInterface
 	hasherFunc func() hash.Hash
-	bufferSize int
 }
 
 // NewS3Calculator creates a new S3 streaming calculator
@@ -37,7 +35,6 @@ func NewS3Calculator(s3Client S3ClientInterface) *S3Calculator {
 	return &S3Calculator{
 		s3Client:   s3Client,
 		hasherFunc: md5.New,
-		bufferSize: BufferSize,
 	}
 }
 
@@ -46,7 +43,6 @@ func NewS3CalculatorWithHasher(s3Client S3ClientInterface, hasherFunc func() has
 	return &S3Calculator{
 		s3Client:   s3Client,
 		hasherFunc: hasherFunc,
-		bufferSize: BufferSize,
 	}
 }
 
@@ -96,11 +92,29 @@ func (c *S3Calculator) CalculateChecksum(ctx context.Context, obj files.S3Object
 	return c.streamAndHash(getResp.Body, obj.URI(), fileSize)
 }
 
-// streamAndHash streams content and calculates hash
+// getAdaptiveBufferSize returns a buffer size based on file size
+func (c *S3Calculator) getAdaptiveBufferSize(fileSize int64) int {
+	switch {
+	case fileSize < 1024*1024: // < 1MB
+		return 64 * 1024 // 64KB
+	case fileSize < 100*1024*1024: // < 100MB
+		return 512 * 1024 // 512KB
+	default: // >= 100MB
+		return 2 * 1024 * 1024 // 2MB
+	}
+}
+
+// streamAndHash streams content and calculates hash using adaptive buffer size
 func (c *S3Calculator) streamAndHash(reader io.Reader, uri string, expectedSize int64) (string, error) {
 	hashWriter := c.hasherFunc()
 
-	totalBytes, err := io.Copy(hashWriter, reader)
+	bufferSize := c.getAdaptiveBufferSize(expectedSize)
+	buffer := make([]byte, bufferSize)
+
+	log.Printf("Using %d KB buffer for %s (%.2f MB file)",
+		bufferSize/1024, uri, float64(expectedSize)/(1024*1024))
+
+	totalBytes, err := io.CopyBuffer(hashWriter, reader, buffer)
 	if err != nil {
 		return "", ErrorReadingFromStream(uri, err)
 	}
