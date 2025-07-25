@@ -15,19 +15,24 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	cwTypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/google/uuid"
 )
 
 type TestClients struct {
-	S3       *s3.Client
-	Lambda   *lambda.Client
-	IAM      *iam.Client
-	DynamoDB *dynamodb.Client
+	S3         *s3.Client
+	Lambda     *lambda.Client
+	IAM        *iam.Client
+	DynamoDB   *dynamodb.Client
+	CloudWatch *cloudwatch.Client
+	SNS        *sns.Client
 }
 
 func setupTestClients(t *testing.T) (*TestClients, string) {
@@ -44,10 +49,12 @@ func setupTestClients(t *testing.T) (*TestClients, string) {
 	}
 
 	return &TestClients{
-		S3:       s3.NewFromConfig(awsConfig),
-		Lambda:   lambda.NewFromConfig(awsConfig),
-		IAM:      iam.NewFromConfig(awsConfig),
-		DynamoDB: dynamodb.NewFromConfig(awsConfig),
+		S3:         s3.NewFromConfig(awsConfig),
+		Lambda:     lambda.NewFromConfig(awsConfig),
+		IAM:        iam.NewFromConfig(awsConfig),
+		DynamoDB:   dynamodb.NewFromConfig(awsConfig),
+		CloudWatch: cloudwatch.NewFromConfig(awsConfig),
+		SNS:        sns.NewFromConfig(awsConfig),
 	}, stackName
 }
 
@@ -501,4 +508,46 @@ func WaitForDynamoDBRecord(t *testing.T, clients *TestClients, tableName string,
 	}
 
 	return lastRecord, success
+}
+
+// getSNSMessageCount gets the NumberOfMessagesPublished metric for an SNS topic from CloudWatch
+func getSNSMessageCount(t *testing.T, ctx context.Context, clients *TestClients, stackName string) (float64, error) {
+	topicName := fmt.Sprintf("%s-email-alert-notifications", stackName)
+
+	// Get metrics for the last 5 minutes to ensure we capture recent activity
+	endTime := time.Now()
+	startTime := endTime.Add(-5 * time.Minute)
+
+	input := &cloudwatch.GetMetricStatisticsInput{
+		Namespace:  aws.String("AWS/SNS"),
+		MetricName: aws.String("NumberOfMessagesPublished"),
+		Dimensions: []cwTypes.Dimension{
+			{
+				Name:  aws.String("TopicName"),
+				Value: aws.String(topicName),
+			},
+		},
+		StartTime:  aws.Time(startTime),
+		EndTime:    aws.Time(endTime),
+		Period:     aws.Int32(60), // 1 minute periods
+		Statistics: []cwTypes.Statistic{cwTypes.StatisticSum},
+	}
+
+	result, err := clients.CloudWatch.GetMetricStatistics(ctx, input)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get CloudWatch metrics: %w", err)
+	}
+
+	// Sum all the datapoints
+	var total float64
+	for _, datapoint := range result.Datapoints {
+		if datapoint.Sum != nil {
+			total += *datapoint.Sum
+		}
+	}
+
+	t.Logf("Found %d CloudWatch datapoints for SNS topic %s, total messages: %.0f",
+		len(result.Datapoints), topicName, total)
+
+	return total, nil
 }
