@@ -10,11 +10,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.45.4
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.44.1
 	github.com/aws/aws-sdk-go-v2/service/iam v1.43.1
-	github.com/aws/aws-sdk-go-v2/service/lambda v1.72.1
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.73.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.84.1
 	github.com/aws/aws-sdk-go-v2/service/sns v1.34.8
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.1
-	github.com/aws/smithy-go v1.22.4
+	github.com/aws/smithy-go v1.22.5
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
 )
