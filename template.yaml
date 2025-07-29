@@ -147,7 +147,7 @@ Resources:
       FunctionName: !Sub "${AWS::StackName}-ChecksumExporterFunction"
       Architectures:
         - !Ref LambdaArchitecture
-      Description: DuraCloud function that exports DynamoDB checksum table monthly
+      Description: DuraCloud function that exports DynamoDB checksum table
       Environment:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
@@ -165,7 +165,6 @@ Resources:
       Policies:
         - AWSLambdaBasicExecutionRole
         - Statement:
-            # DynamoDB export permissions
             - Effect: Allow
               Action:
                 - dynamodb:DescribeTable
@@ -174,7 +173,6 @@ Resources:
               Resource:
                 - !GetAtt DynamoDBChecksumTable.Arn
                 - !Sub "${DynamoDBChecksumTable.Arn}/export/*"
-            # S3 permissions for export destination
             - Effect: Allow
               Action:
                 - s3:PutObject
@@ -637,7 +635,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "Trigger monthly DynamoDB checksum table CSV reports"
-      ScheduleExpression: "cron(0 9 1 * ? *)" # 1st day of month at 9 AM UTC (3 hours after JSON exports generated)
+      ScheduleExpression: "cron(0 6 2 * ? *)" # 2nd day of month at 6 AM UTC (24 hours after JSON exports generated)
       State: ENABLED
       Targets:
         - Arn: !GetAtt ChecksumExportCSVReportFunction.Arn
@@ -847,6 +845,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-exporter"
+      RetentionInDays: 30
+
+  LogsChecksumExportCSVReportFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-export-csv-report"
       RetentionInDays: 30
 
   LogsChecksumFailureFunction:
