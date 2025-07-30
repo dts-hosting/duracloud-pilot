@@ -5,20 +5,16 @@ import (
 	"compress/gzip"
 	"context"
 	"duracloud/internal/accounts"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	//"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
 	"log"
 	"os"
-	"sort"
 	"strings"
 	"time"
 )
@@ -87,7 +83,7 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 }
 
 func getExportDataFile(ctx context.Context, key string) (output string, err error) {
-	key = fmt.Sprintf("%s/manifest-files.json", prefix)
+	//key = fmt.Sprintf("%s/manifest-files.json", prefix)
 	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(managedBucketName),
 		Key:    aws.String(key),
@@ -144,41 +140,43 @@ func parseManifest(ctx context.Context, manifestBody string) (csv string, err er
 	return csvReport, nil
 }
 
-func parseExport(os.File) error {
-	// Create CSV file
-	file, err := os.Create("output.csv")
-	if err != nil {
-		log.Fatalf("failed to create output file, %v", err)
-		return err
-	}
-	defer file.Close()
+//func parseExport(os.File) error {
+//	// Create CSV file
+//	file, err := os.Create("output.csv")
+//	if err != nil {
+//		log.Fatalf("failed to create output file, %v", err)
+//		return err
+//	}
+//	defer func(file *os.File) {
+//		_ = file.Close()
+//	}(file)
+//
+//	writer := csv.NewWriter(file)
+//	defer writer.Flush()
+//
+//	// Determine header order (e.g., sorted keys from the first map)
+//	var headers []string
+//	//for key := range data[0] {
+//	//	headers = append(headers, key)
+//	//}
+//	sort.Strings(headers)
+//	return nil
+//}
 
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// Determine header order (e.g., sorted keys from the first map)
-	var headers []string
-	//for key := range data[0] {
-	//	headers = append(headers, key)
-	//}
-	sort.Strings(headers)
-	return nil
-}
-
-func decodeLine(raw []byte) (map[string]interface{}, error) {
-	// Step 1: Unmarshal into map[string]types.AttributeValue
-	var avMap map[string]types.AttributeValue
-	if err := json.Unmarshal(raw, &avMap); err != nil {
-		return nil, fmt.Errorf("parse export line: %w", err)
-	}
-
-	// Step 2: Convert to Go-native map[string]interface{}
-	var out map[string]interface{}
-	if err := attributevalue.UnmarshalMap(avMap, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal attr values: %w", err)
-	}
-	return out, nil
-}
+//func decodeLine(raw []byte) (map[string]interface{}, error) {
+//	// Step 1: Unmarshal into map[string]types.AttributeValue
+//	var avMap map[string]types.AttributeValue
+//	if err := json.Unmarshal(raw, &avMap); err != nil {
+//		return nil, fmt.Errorf("parse export line: %w", err)
+//	}
+//
+//	// Step 2: Convert to Go-native map[string]interface{}
+//	var out map[string]interface{}
+//	if err := attributevalue.UnmarshalMap(avMap, &out); err != nil {
+//		return nil, fmt.Errorf("unmarshal attr values: %w", err)
+//	}
+//	return out, nil
+//}
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
@@ -220,7 +218,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		log.Printf("failed to get export manifest: %v", err)
 	}
 
-	parseManifest(ctx, manifest)
+	_, _ = parseManifest(ctx, manifest)
 	return nil
 }
 

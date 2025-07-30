@@ -22,6 +22,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for Checksum Exporter function (leave empty for local build)"
+  ChecksumExportCSVReportImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for Checksum Export CSV report function (leave empty for local build)"
   ChecksumFailureImageUri:
     Type: String
     Default: ""
@@ -51,6 +55,8 @@ Conditions:
     !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
   ChecksumExporterUseExternalImage:
     !Not [!Equals [!Ref ChecksumExporterImageUri, ""]]
+  ChecksumExportCSVReportUseExternalImage:
+    !Not [!Equals [!Ref ChecksumExportCSVReportImageUri, ""]]
   ChecksumFailureUseExternalImage:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
@@ -203,12 +209,11 @@ Resources:
       Description: DuraCloud function that writes CSV Reports of DynamoDB table exports
       Environment:
         Variables:
-          DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
           S3_MANAGED_BUCKET: !Ref S3ManagedBucket
       ImageUri:
         !If [
-          ChecksumExporterUseExternalImage,
-          !Ref ChecksumExporterImageUri,
+          ChecksumExportCSVReportUseExternalImage,
+          !Ref ChecksumExportCSVReportImageUri,
           !Ref "AWS::NoValue",
         ]
       LoggingConfig:
