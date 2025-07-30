@@ -17,6 +17,7 @@ on:
       - ".github/workflows/docker-build-push.yml"
       - "cmd/**"
       - "internal/**"
+      - "test/**"
 
 env:
   DOCKER_REGISTRY: docker.io
@@ -31,11 +32,13 @@ jobs:
       matrix:
         function:
           - bucket-requested
+          - checksum-export-csv-report
           - checksum-exporter
           - checksum-failure
           - checksum-verification
           - file-deleted
           - file-uploaded
+          - report-generator
 
     steps:
       - name: Checkout code
