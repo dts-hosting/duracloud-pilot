@@ -42,6 +42,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for File Uploaded function (leave empty for local build)"
+  ReportGeneratorImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for Report Generator function (leave empty for local build)"
   LambdaArchitecture:
     Type: String
     AllowedValues:
@@ -64,6 +68,8 @@ Conditions:
   EnableEmailAlertNotifications: !Not [!Equals [!Ref AlertEmailAddress, ""]]
   FileDeletedUseExternalImage: !Not [!Equals [!Ref FileDeletedImageUri, ""]]
   FileUploadedUseExternalImage: !Not [!Equals [!Ref FileUploadedImageUri, ""]]
+  ReportGeneratorUseExternalImage:
+    !Not [!Equals [!Ref ReportGeneratorImageUri, ""]]
 
 Resources:
   ##### Functions
@@ -441,6 +447,58 @@ Resources:
               Resource: !GetAtt SQSObjectCreated.Arn
       Timeout: 900
 
+  ReportGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: report-generator
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-report-generator"
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ReportGeneratorFunction"
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that generates storage stats report
+      Environment:
+        Variables:
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+      ImageUri:
+        !If [
+          ReportGeneratorUseExternalImage,
+          !Ref ReportGeneratorImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      LoggingConfig:
+        LogGroup: !Ref LogsReportGeneratorFunction
+      MemorySize: 256
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            # CloudWatch permissions for S3 Storage Lens metrics
+            - Effect: Allow
+              Action:
+                - cloudwatch:GetMetricStatistics
+                - cloudwatch:GetMetricData
+                - cloudwatch:ListMetrics
+              Resource: "*"
+            # S3 permissions for upload destination
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:AbortMultipartUpload
+                - s3:ListBucketMultipartUploads
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !Sub "${S3ManagedBucket.Arn}/reports/*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !GetAtt S3ManagedBucket.Arn
+      Timeout: 900
+
   ##### Function resources (TODO: docs for each resource)
   CloudWatchChecksumExporterFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -462,6 +520,7 @@ Resources:
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
 
+  # TODO: CloudWatchChecksumExportCSVReportFunctionErrorAlarm
   # TODO: CloudWatchChecksumVerificationFunctionErrorAlarm
 
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
@@ -537,6 +596,26 @@ Resources:
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
       OKActions: !If
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
+        - !Ref "AWS::NoValue"
+
+  CloudWatchReportGeneratorFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-report-generator-errors"
+      AlarmDescription: "Error generating storage stats report"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ReportGeneratorFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      AlarmActions: !If
         - EnableEmailAlertNotifications
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
@@ -645,6 +724,16 @@ Resources:
       Targets:
         - Arn: !GetAtt ChecksumExportCSVReportFunction.Arn
           Id: "ChecksumExportCSVReportTarget"
+
+  EventsReportGeneratorSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger weekly stats report generation"
+      ScheduleExpression: "cron(0 8 ? * SUN *)" # Every Sunday at 8 AM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReportGeneratorFunction.Arn
+          Id: "ReportGeneratorTarget"
 
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
@@ -820,6 +909,14 @@ Resources:
       MaximumBatchingWindowInSeconds: 5
       StartingPosition: TRIM_HORIZON
 
+  LambdaReportGeneratorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ReportGeneratorFunction.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventsReportGeneratorSchedule.Arn
+
   LambdaSQSObjectCreatedSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -880,6 +977,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-file-uploaded"
+      RetentionInDays: 7
+
+  LogsReportGeneratorFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-report-generator"
       RetentionInDays: 7
 
   S3BucketRequestedBucket:
