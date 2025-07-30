@@ -22,6 +22,10 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for Checksum Exporter function (leave empty for local build)"
+  ChecksumExportCSVReportImageUri:
+    Type: String
+    Default: ""
+    Description: "Docker image for Checksum Export CSV report function (leave empty for local build)"
   ChecksumFailureImageUri:
     Type: String
     Default: ""
@@ -51,6 +55,8 @@ Conditions:
     !Not [!Equals [!Ref BucketRequestedImageUri, ""]]
   ChecksumExporterUseExternalImage:
     !Not [!Equals [!Ref ChecksumExporterImageUri, ""]]
+  ChecksumExportCSVReportUseExternalImage:
+    !Not [!Equals [!Ref ChecksumExportCSVReportImageUri, ""]]
   ChecksumFailureUseExternalImage:
     !Not [!Equals [!Ref ChecksumFailureImageUri, ""]]
   ChecksumVerificationUseExternalImage:
@@ -147,7 +153,7 @@ Resources:
       FunctionName: !Sub "${AWS::StackName}-ChecksumExporterFunction"
       Architectures:
         - !Ref LambdaArchitecture
-      Description: DuraCloud function that exports DynamoDB checksum table monthly
+      Description: DuraCloud function that exports DynamoDB checksum table
       Environment:
         Variables:
           DYNAMODB_CHECKSUM_TABLE: !Ref DynamoDBChecksumTable
@@ -165,7 +171,6 @@ Resources:
       Policies:
         - AWSLambdaBasicExecutionRole
         - Statement:
-            # DynamoDB export permissions
             - Effect: Allow
               Action:
                 - dynamodb:DescribeTable
@@ -174,6 +179,50 @@ Resources:
               Resource:
                 - !GetAtt DynamoDBChecksumTable.Arn
                 - !Sub "${DynamoDBChecksumTable.Arn}/export/*"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:AbortMultipartUpload
+                - s3:ListBucketMultipartUploads
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !Sub "${S3ManagedBucket.Arn}/exports/*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: !GetAtt S3ManagedBucket.Arn
+      Timeout: 900
+
+  ChecksumExportCSVReportFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerBuildArgs:
+        FUNCTION_NAME: checksum-export-csv-report
+      DockerContext: .
+      Dockerfile: Dockerfile
+      DockerTag: !Sub "${AWS::StackName}-checksum-export-csv-report"
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-ChecksumExportCSVReportFunction"
+      Architectures:
+        - !Ref LambdaArchitecture
+      Description: DuraCloud function that writes CSV Reports of DynamoDB table exports
+      Environment:
+        Variables:
+          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+      ImageUri:
+        !If [
+          ChecksumExportCSVReportUseExternalImage,
+          !Ref ChecksumExportCSVReportImageUri,
+          !Ref "AWS::NoValue",
+        ]
+      LoggingConfig:
+        LogGroup: !Ref LogsChecksumExportCSVReportFunction
+      MemorySize: 256
+      PackageType: Image
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
             # S3 permissions for export destination
             - Effect: Allow
               Action:
@@ -587,6 +636,16 @@ Resources:
         - Arn: !GetAtt ChecksumExporterFunction.Arn
           Id: "ChecksumExporterTarget"
 
+  EventsChecksumExportCSVReportSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger monthly DynamoDB checksum table CSV reports"
+      ScheduleExpression: "cron(0 6 2 * ? *)" # 2nd day of month at 6 AM UTC (24 hours after JSON exports generated)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ChecksumExportCSVReportFunction.Arn
+          Id: "ChecksumExportCSVReportTarget"
+
   EventsObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
@@ -719,6 +778,14 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventsChecksumExporterSchedule.Arn
 
+  LambdaChecksumExportCSVReportInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt ChecksumExportCSVReportFunction.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventsChecksumExportCSVReportSchedule.Arn
+
   LambdaDynamoDBChecksumFailureSource:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -783,6 +850,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-exporter"
+      RetentionInDays: 30
+
+  LogsChecksumExportCSVReportFunction:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-checksum-export-csv-report"
       RetentionInDays: 30
 
   LogsChecksumFailureFunction:
