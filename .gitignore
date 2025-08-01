@@ -4,6 +4,8 @@
 .idea
 .junie
 .sam-translate/
+.terraform.lock.hcl
+.terraform/
 .vscode/settings.json
 *.html
 !cmd/report-generator/templates/storage-report.html
