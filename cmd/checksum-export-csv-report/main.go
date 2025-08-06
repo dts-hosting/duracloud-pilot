@@ -7,6 +7,9 @@ import (
 	"duracloud/internal/accounts"
 	"encoding/json"
 	"fmt"
+	"path"
+	"sync"
+
 	//"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -117,27 +120,20 @@ func getExportDataFile(ctx context.Context, key string) (output string, err erro
 	return out, nil
 }
 
-//func parseDataFile() (ctx context.Context, key string, err error) {}
-
-func parseManifest(ctx context.Context, manifestBody string) (csv string, err error) {
+func parseManifest(ctx context.Context, manifestBody string, processEntry func(ManifestEntry)) error {
 	dec := json.NewDecoder(strings.NewReader(manifestBody))
-	var csvReport string
 	for {
 		var e ManifestEntry
 		if err := dec.Decode(&e); err == io.EOF {
 			break
 		} else if err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("failed to decode manifest entry: %w", err)
 		}
 
-		csv, err := getExportDataFile(ctx, e.DataFileS3Key)
-		if err != nil {
-			log.Fatal(err)
-		}
-		csvReport = fmt.Sprintf("%s\n%s", csvReport, csv)
+		processEntry(e)
 	}
 
-	return csvReport, nil
+	return nil
 }
 
 //func parseExport(os.File) error {
@@ -218,8 +214,63 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		log.Printf("failed to get export manifest: %v", err)
 	}
 
-	_, _ = parseManifest(ctx, manifest)
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 10) // Limit to 10 goroutines at a time
+
+	err = parseManifest(ctx, manifest, func(entry ManifestEntry) {
+		wg.Add(1)
+		go func(e ManifestEntry) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			csv, err := getExportDataFile(ctx, e.DataFileS3Key)
+			if err != nil {
+				log.Printf("Failed to get export data for %s: %v", e.DataFileS3Key, err)
+				return // probs need to handle an issue better
+			}
+
+			fileId := fmt.Sprintf("export_%s.csv", extractFileID(e.DataFileS3Key))
+			csvFilename := getCsvKey(fileId, today, arn)
+
+			if err := writeCSVFile(ctx, csvFilename, csv); err != nil {
+				log.Printf("Failed to write CSV for %s: %v", e.DataFileS3Key, err)
+				return // probs need to handle an issue better
+			}
+
+			log.Printf("Successfully processed %s", e.DataFileS3Key)
+		}(entry)
+
+	})
+
+	wg.Wait()
+
 	return nil
+}
+
+func writeCSVFile(ctx context.Context, key string, csv string) error {
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(managedBucketName),
+		Key:    aws.String(key),
+		Body:   strings.NewReader(csv),
+	}
+	_, err := s3Client.PutObject(ctx, input)
+
+	if err != nil {
+		log.Fatalf("Failed to write CSV Report to S3, %v", err)
+	}
+	log.Printf("Successfully wrote CSV Report at %s to S3", key)
+	return nil
+}
+
+func getCsvKey(id string, date string, exportId string) string {
+	return fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportId, id)
+}
+
+func extractFileID(key string) string {
+	filename := path.Base(key)
+	id := strings.TrimSuffix(filename, ".json.gz")
+	return id
 }
 
 func main() {
