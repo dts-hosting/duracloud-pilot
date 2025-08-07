@@ -243,6 +243,10 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	})
 
+	if err != nil {
+		log.Printf("failed to parse export data: %v", err)
+		return err
+	}
 	wg.Wait()
 
 	return nil
