@@ -45,6 +45,16 @@ var (
 	today             string
 )
 
+func extractFileID(key string) string {
+	filename := path.Base(key)
+	id := strings.TrimSuffix(filename, ".json.gz")
+	return id
+}
+
+func getCsvKey(id string, date string, exportId string) string {
+	return fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportId, id)
+}
+
 func getExportArn(ctx context.Context, prefix string) (exportArn string, err error) {
 	result, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(managedBucketName),
@@ -66,6 +76,40 @@ func getExportArn(ctx context.Context, prefix string) (exportArn string, err err
 	return firstObject, nil
 }
 
+func getExportDataFile(ctx context.Context, key string) (output string, err error) {
+	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(managedBucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		log.Fatalf("failed to get object, %v", err)
+	}
+
+	// Create gzip reader
+	gzr, err := gzip.NewReader(resp.Body)
+	if err != nil {
+		log.Fatalf("failed to create gzip reader: %v", err)
+	}
+	defer gzr.Close()
+
+	scanner := bufio.NewScanner(gzr)
+	var out = "Key,Count,MD5Checksum\n"
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		var entry ManifestEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			log.Printf("error parsing JSON line: %v", err)
+			continue
+		}
+		out += fmt.Sprintf("%s,%d,%s\n", entry.DataFileS3Key, entry.ItemCount, entry.MD5Checksum)
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("scanner error: %v", err)
+	}
+	return out, nil
+}
+
 func getExportManifest(ctx context.Context, prefix string) (manifest string, err error) {
 	key := fmt.Sprintf("%s/manifest-files.json", prefix)
 	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
@@ -83,118 +127,6 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 
 	bodyString := string(bodyBytes)
 	return bodyString, nil
-}
-
-func getExportDataFile(ctx context.Context, key string) (output string, err error) {
-	//key = fmt.Sprintf("%s/manifest-files.json", prefix)
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(managedBucketName),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		log.Fatalf("failed to get object, %v", err)
-	}
-
-	// Create gzip reader
-	gzr, err := gzip.NewReader(resp.Body)
-	if err != nil {
-		log.Fatalf("failed to create gzip reader: %v", err)
-	}
-	//defer gzr.Close()
-
-	scanner := bufio.NewScanner(gzr)
-	var out string
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		var entry ManifestEntry
-		if err := json.Unmarshal(line, &entry); err != nil {
-			log.Printf("error parsing JSON line: %v", err)
-			continue
-		}
-		out += fmt.Sprintf("%s,%d,%s\n", entry.DataFileS3Key, entry.ItemCount, entry.MD5Checksum)
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("scanner error: %v", err)
-	}
-	return out, nil
-}
-
-func parseManifest(ctx context.Context, manifestBody string, processEntry func(ManifestEntry)) error {
-	dec := json.NewDecoder(strings.NewReader(manifestBody))
-	for {
-		var e ManifestEntry
-		if err := dec.Decode(&e); err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("failed to decode manifest entry: %w", err)
-		}
-
-		processEntry(e)
-	}
-
-	return nil
-}
-
-//func parseExport(os.File) error {
-//	// Create CSV file
-//	file, err := os.Create("output.csv")
-//	if err != nil {
-//		log.Fatalf("failed to create output file, %v", err)
-//		return err
-//	}
-//	defer func(file *os.File) {
-//		_ = file.Close()
-//	}(file)
-//
-//	writer := csv.NewWriter(file)
-//	defer writer.Flush()
-//
-//	// Determine header order (e.g., sorted keys from the first map)
-//	var headers []string
-//	//for key := range data[0] {
-//	//	headers = append(headers, key)
-//	//}
-//	sort.Strings(headers)
-//	return nil
-//}
-
-//func decodeLine(raw []byte) (map[string]interface{}, error) {
-//	// Step 1: Unmarshal into map[string]types.AttributeValue
-//	var avMap map[string]types.AttributeValue
-//	if err := json.Unmarshal(raw, &avMap); err != nil {
-//		return nil, fmt.Errorf("parse export line: %w", err)
-//	}
-//
-//	// Step 2: Convert to Go-native map[string]interface{}
-//	var out map[string]interface{}
-//	if err := attributevalue.UnmarshalMap(avMap, &out); err != nil {
-//		return nil, fmt.Errorf("unmarshal attr values: %w", err)
-//	}
-//	return out, nil
-//}
-
-func init() {
-	awsConfig, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
-	}
-
-	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
-	if err != nil {
-		log.Fatalf("Unable to get AWS account ID: %v", err)
-	}
-
-	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
-	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
-	today = time.Now().Format("2006-01-02")
-	s3Client = s3.NewFromConfig(awsConfig)
-	awsCtx = accounts.AWSContext{
-		AccountID: accountID,
-		Region:    region,
-		StackName: bucketPrefix,
-	}
-
 }
 
 func handler(ctx context.Context, event json.RawMessage) error {
@@ -252,6 +184,49 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	return nil
 }
 
+func init() {
+	awsConfig, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatalf("Unable to load AWS config: %v", err)
+	}
+
+	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
+	if err != nil {
+		log.Fatalf("Unable to get AWS account ID: %v", err)
+	}
+
+	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
+	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
+	today = time.Now().Format("2006-01-02")
+	s3Client = s3.NewFromConfig(awsConfig)
+	awsCtx = accounts.AWSContext{
+		AccountID: accountID,
+		Region:    region,
+		StackName: bucketPrefix,
+	}
+
+}
+
+func main() {
+	lambda.Start(handler)
+}
+
+func parseManifest(ctx context.Context, manifestBody string, processEntry func(ManifestEntry)) error {
+	dec := json.NewDecoder(strings.NewReader(manifestBody))
+	for {
+		var e ManifestEntry
+		if err := dec.Decode(&e); err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("failed to decode manifest entry: %w", err)
+		}
+
+		processEntry(e)
+	}
+
+	return nil
+}
+
 func writeCSVFile(ctx context.Context, key string, csv string) error {
 	input := &s3.PutObjectInput{
 		Bucket: aws.String(managedBucketName),
@@ -265,18 +240,4 @@ func writeCSVFile(ctx context.Context, key string, csv string) error {
 	}
 	log.Printf("Successfully wrote CSV Report at %s to S3", key)
 	return nil
-}
-
-func getCsvKey(id string, date string, exportId string) string {
-	return fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportId, id)
-}
-
-func extractFileID(key string) string {
-	filename := path.Base(key)
-	id := strings.TrimSuffix(filename, ".json.gz")
-	return id
-}
-
-func main() {
-	lambda.Start(handler)
 }
