@@ -1,13 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"compress/gzip"
 	"context"
 	"duracloud/internal/accounts"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	//"github.com/aws/aws-lambda-go/events"
+	"path"
+	"strconv"
+	"sync"
+
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -29,18 +32,37 @@ type ManifestEntry struct {
 	DataFileS3Key string `json:"dataFileS3Key"`
 }
 
+type ExportRecord struct {
+	Item struct {
+		BucketName          struct{ S string }  `json:"BucketName"`
+		ObjectKey           struct{ S string }  `json:"ObjectKey"`
+		Checksum            struct{ S string }  `json:"Checksum"`
+		LastChecksumSuccess struct{ BOOL bool } `json:"LastChecksumSuccess"`
+		LastChecksumDate    struct{ S string }  `json:"LastChecksumDate"`
+		LastChecksumMessage struct{ S string }  `json:"LastChecksumMessage"`
+	} `json:"Item"`
+}
+
 var (
-	accountID    string
-	awsCtx       accounts.AWSContext
-	bucketPrefix string
-	//exportBucket      string
-	//items             []Item
+	accountID         string
+	awsCtx            accounts.AWSContext
+	bucketPrefix      string
 	managedBucketName string
 	prefix            string
 	region            string
 	s3Client          *s3.Client
 	today             string
 )
+
+func extractFileID(key string) string {
+	filename := path.Base(key)
+	id := strings.TrimSuffix(filename, ".json.gz")
+	return id
+}
+
+func getCsvKey(id string, date string, exportId string) string {
+	return fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportId, id)
+}
 
 func getExportArn(ctx context.Context, prefix string) (exportArn string, err error) {
 	result, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
@@ -52,19 +74,69 @@ func getExportArn(ctx context.Context, prefix string) (exportArn string, err err
 	if err != nil {
 		log.Fatalf("failed to list objects, %v", err)
 	}
-
 	var firstObject string
-	if len(result.Contents) > 0 {
-		firstObject = aws.ToString(result.Contents[0].Key)
+	if len(result.CommonPrefixes) > 0 {
+		firstObject = aws.ToString(result.CommonPrefixes[0].Prefix)
+		fmt.Sprintf("Found export %s", firstObject)
 	} else {
-		fmt.Println("Bucket is empty.")
+		fmt.Sprintf("Managed Bucket %s is empty.", managedBucketName)
 	}
 
 	return firstObject, nil
 }
 
+func getExportDataFile(ctx context.Context, key string) (output string, err error) {
+	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(managedBucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		log.Fatalf("failed to get object, %v", err)
+	}
+	defer obj.Body.Close()
+
+	gzr, err := gzip.NewReader(obj.Body)
+	if err != nil {
+		log.Fatalf("failed to create gzip reader: %v", err)
+	}
+	defer gzr.Close()
+
+	dec := json.NewDecoder(gzr)
+
+	var b strings.Builder
+	w := csv.NewWriter(&b)
+
+	_ = w.Write([]string{
+		"BucketName,ObjectKey,Checksum,LastChecksumSuccess,LastChecksumDate,LastChecksumMessage",
+	})
+
+	for {
+		var rec ExportRecord
+		if err := dec.Decode(&rec); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+
+		_ = w.Write([]string{
+			rec.Item.BucketName.S,
+			rec.Item.ObjectKey.S,
+			rec.Item.Checksum.S,
+			strconv.FormatBool(rec.Item.LastChecksumSuccess.BOOL),
+			rec.Item.LastChecksumDate.S,
+			rec.Item.LastChecksumMessage.S,
+		})
+		w.Flush()
+	}
+	if err := w.Error(); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
 func getExportManifest(ctx context.Context, prefix string) (manifest string, err error) {
-	key := fmt.Sprintf("%s/manifest-files.json", prefix)
+	key := fmt.Sprintf("%smanifest-files.json", prefix)
 	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(managedBucketName),
 		Key:    aws.String(key),
@@ -82,101 +154,60 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 	return bodyString, nil
 }
 
-func getExportDataFile(ctx context.Context, key string) (output string, err error) {
-	//key = fmt.Sprintf("%s/manifest-files.json", prefix)
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(managedBucketName),
-		Key:    aws.String(key),
+func handler(ctx context.Context, event json.RawMessage) error {
+	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
+
+	prefix = fmt.Sprintf("exports/checksum-table/%s/AWSDynamoDB/", today)
+	log.Printf("loading from %s", prefix)
+
+	arn, err := getExportArn(ctx, prefix)
+	if err != nil {
+		log.Printf("failed to get export arn: %v", err)
+	}
+	log.Printf("found export arn: %s", arn)
+
+	manifest, err := getExportManifest(ctx, arn)
+	if err != nil {
+		log.Printf("failed to get export manifest: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 10) // Limit to 10 goroutines at a time
+
+	err = parseManifest(ctx, manifest, func(entry ManifestEntry) {
+		wg.Add(1)
+		go func(e ManifestEntry) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			csv, err := getExportDataFile(ctx, e.DataFileS3Key)
+			if err != nil {
+				log.Printf("Failed to get export data for %s: %v", e.DataFileS3Key, err)
+				return // probs need to handle an issue better
+			}
+
+			fileId := fmt.Sprintf("export_%s.csv", extractFileID(e.DataFileS3Key))
+			csvFilename := getCsvKey(fileId, today, arn)
+
+			if err := writeCSVFile(ctx, csvFilename, csv); err != nil {
+				log.Printf("Failed to write CSV for %s: %v", e.DataFileS3Key, err)
+				return // probs need to handle an issue better
+			}
+
+			log.Printf("Successfully processed %s", e.DataFileS3Key)
+		}(entry)
+
 	})
+
 	if err != nil {
-		log.Fatalf("failed to get object, %v", err)
+		log.Printf("failed to parse export data: %v", err)
+		return err
 	}
+	wg.Wait()
 
-	// Create gzip reader
-	gzr, err := gzip.NewReader(resp.Body)
-	if err != nil {
-		log.Fatalf("failed to create gzip reader: %v", err)
-	}
-	//defer gzr.Close()
-
-	scanner := bufio.NewScanner(gzr)
-	var out string
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		var entry ManifestEntry
-		if err := json.Unmarshal(line, &entry); err != nil {
-			log.Printf("error parsing JSON line: %v", err)
-			continue
-		}
-		out += fmt.Sprintf("%s,%d,%s\n", entry.DataFileS3Key, entry.ItemCount, entry.MD5Checksum)
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("scanner error: %v", err)
-	}
-	return out, nil
+	return nil
 }
-
-//func parseDataFile() (ctx context.Context, key string, err error) {}
-
-func parseManifest(ctx context.Context, manifestBody string) (csv string, err error) {
-	dec := json.NewDecoder(strings.NewReader(manifestBody))
-	var csvReport string
-	for {
-		var e ManifestEntry
-		if err := dec.Decode(&e); err == io.EOF {
-			break
-		} else if err != nil {
-			log.Fatal(err)
-		}
-
-		csv, err := getExportDataFile(ctx, e.DataFileS3Key)
-		if err != nil {
-			log.Fatal(err)
-		}
-		csvReport = fmt.Sprintf("%s\n%s", csvReport, csv)
-	}
-
-	return csvReport, nil
-}
-
-//func parseExport(os.File) error {
-//	// Create CSV file
-//	file, err := os.Create("output.csv")
-//	if err != nil {
-//		log.Fatalf("failed to create output file, %v", err)
-//		return err
-//	}
-//	defer func(file *os.File) {
-//		_ = file.Close()
-//	}(file)
-//
-//	writer := csv.NewWriter(file)
-//	defer writer.Flush()
-//
-//	// Determine header order (e.g., sorted keys from the first map)
-//	var headers []string
-//	//for key := range data[0] {
-//	//	headers = append(headers, key)
-//	//}
-//	sort.Strings(headers)
-//	return nil
-//}
-
-//func decodeLine(raw []byte) (map[string]interface{}, error) {
-//	// Step 1: Unmarshal into map[string]types.AttributeValue
-//	var avMap map[string]types.AttributeValue
-//	if err := json.Unmarshal(raw, &avMap); err != nil {
-//		return nil, fmt.Errorf("parse export line: %w", err)
-//	}
-//
-//	// Step 2: Convert to Go-native map[string]interface{}
-//	var out map[string]interface{}
-//	if err := attributevalue.UnmarshalMap(avMap, &out); err != nil {
-//		return nil, fmt.Errorf("unmarshal attr values: %w", err)
-//	}
-//	return out, nil
-//}
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
@@ -201,27 +232,37 @@ func init() {
 
 }
 
-func handler(ctx context.Context, event json.RawMessage) error {
-	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
+func main() {
+	lambda.Start(handler)
+}
 
-	prefix = fmt.Sprintf("/exports/checksum-table/%s/AWSDynamoDB/", today)
-	log.Printf("loading from %s", prefix)
+func parseManifest(ctx context.Context, manifestBody string, processEntry func(ManifestEntry)) error {
+	dec := json.NewDecoder(strings.NewReader(manifestBody))
+	for {
+		var e ManifestEntry
+		if err := dec.Decode(&e); err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("failed to decode manifest entry: %w", err)
+		}
 
-	arn, err := getExportArn(ctx, prefix)
-	if err != nil {
-		log.Printf("failed to get export arn: %v", err)
+		processEntry(e)
 	}
-	log.Printf("found export arn: %s", arn)
 
-	manifest, err := getExportManifest(ctx, prefix)
-	if err != nil {
-		log.Printf("failed to get export manifest: %v", err)
-	}
-
-	_, _ = parseManifest(ctx, manifest)
 	return nil
 }
 
-func main() {
-	lambda.Start(handler)
+func writeCSVFile(ctx context.Context, key string, csv string) error {
+	input := &s3.PutObjectInput{
+		Bucket: aws.String(managedBucketName),
+		Key:    aws.String(key),
+		Body:   strings.NewReader(csv),
+	}
+	_, err := s3Client.PutObject(ctx, input)
+
+	if err != nil {
+		log.Fatalf("Failed to write CSV Report to S3, %v", err)
+	}
+	log.Printf("Successfully wrote CSV Report at %s to S3", key)
+	return nil
 }
