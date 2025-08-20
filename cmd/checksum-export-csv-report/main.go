@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"compress/gzip"
 	"context"
 	"duracloud/internal/accounts"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"path"
+	"strconv"
 	"sync"
 
-	//"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -32,12 +32,21 @@ type ManifestEntry struct {
 	DataFileS3Key string `json:"dataFileS3Key"`
 }
 
+type ExportRecord struct {
+	Item struct {
+		BucketName          struct{ S string }  `json:"BucketName"`
+		ObjectKey           struct{ S string }  `json:"ObjectKey"`
+		Checksum            struct{ S string }  `json:"Checksum"`
+		LastChecksumSuccess struct{ BOOL bool } `json:"LastChecksumSuccess"`
+		LastChecksumDate    struct{ S string }  `json:"LastChecksumDate"`
+		LastChecksumMessage struct{ S string }  `json:"LastChecksumMessage"`
+	} `json:"Item"`
+}
+
 var (
-	accountID    string
-	awsCtx       accounts.AWSContext
-	bucketPrefix string
-	//exportBucket      string
-	//items             []Item
+	accountID         string
+	awsCtx            accounts.AWSContext
+	bucketPrefix      string
 	managedBucketName string
 	prefix            string
 	region            string
@@ -65,53 +74,69 @@ func getExportArn(ctx context.Context, prefix string) (exportArn string, err err
 	if err != nil {
 		log.Fatalf("failed to list objects, %v", err)
 	}
-
 	var firstObject string
-	if len(result.Contents) > 0 {
-		firstObject = aws.ToString(result.Contents[0].Key)
+	if len(result.CommonPrefixes) > 0 {
+		firstObject = aws.ToString(result.CommonPrefixes[0].Prefix)
+		fmt.Sprintf("Found export %s", firstObject)
 	} else {
-		fmt.Println("Bucket is empty.")
+		fmt.Sprintf("Managed Bucket %s is empty.", managedBucketName)
 	}
 
 	return firstObject, nil
 }
 
 func getExportDataFile(ctx context.Context, key string) (output string, err error) {
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(managedBucketName),
 		Key:    aws.String(key),
 	})
 	if err != nil {
 		log.Fatalf("failed to get object, %v", err)
 	}
+	defer obj.Body.Close()
 
-	// Create gzip reader
-	gzr, err := gzip.NewReader(resp.Body)
+	gzr, err := gzip.NewReader(obj.Body)
 	if err != nil {
 		log.Fatalf("failed to create gzip reader: %v", err)
 	}
 	defer gzr.Close()
 
-	scanner := bufio.NewScanner(gzr)
-	var out = "Key,Count,MD5Checksum\n"
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		var entry ManifestEntry
-		if err := json.Unmarshal(line, &entry); err != nil {
-			log.Printf("error parsing JSON line: %v", err)
-			continue
-		}
-		out += fmt.Sprintf("%s,%d,%s\n", entry.DataFileS3Key, entry.ItemCount, entry.MD5Checksum)
-	}
+	dec := json.NewDecoder(gzr)
 
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("scanner error: %v", err)
+	var b strings.Builder
+	w := csv.NewWriter(&b)
+
+	_ = w.Write([]string{
+		"BucketName,ObjectKey,Checksum,LastChecksumSuccess,LastChecksumDate,LastChecksumMessage",
+	})
+
+	for {
+		var rec ExportRecord
+		if err := dec.Decode(&rec); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+
+		_ = w.Write([]string{
+			rec.Item.BucketName.S,
+			rec.Item.ObjectKey.S,
+			rec.Item.Checksum.S,
+			strconv.FormatBool(rec.Item.LastChecksumSuccess.BOOL),
+			rec.Item.LastChecksumDate.S,
+			rec.Item.LastChecksumMessage.S,
+		})
+		w.Flush()
 	}
-	return out, nil
+	if err := w.Error(); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
 
 func getExportManifest(ctx context.Context, prefix string) (manifest string, err error) {
-	key := fmt.Sprintf("%s/manifest-files.json", prefix)
+	key := fmt.Sprintf("%smanifest-files.json", prefix)
 	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(managedBucketName),
 		Key:    aws.String(key),
@@ -132,7 +157,7 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 func handler(ctx context.Context, event json.RawMessage) error {
 	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
 
-	prefix = fmt.Sprintf("/exports/checksum-table/%s/AWSDynamoDB/", today)
+	prefix = fmt.Sprintf("exports/checksum-table/%s/AWSDynamoDB/", today)
 	log.Printf("loading from %s", prefix)
 
 	arn, err := getExportArn(ctx, prefix)
@@ -141,7 +166,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 	log.Printf("found export arn: %s", arn)
 
-	manifest, err := getExportManifest(ctx, prefix)
+	manifest, err := getExportManifest(ctx, arn)
 	if err != nil {
 		log.Printf("failed to get export manifest: %v", err)
 	}
