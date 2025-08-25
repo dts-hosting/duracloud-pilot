@@ -7,7 +7,6 @@ import (
 	"duracloud/internal/files"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
@@ -24,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 type TestClients struct {

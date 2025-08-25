@@ -3,8 +3,9 @@ package queues
 import (
 	"duracloud/internal/buckets"
 	"encoding/json"
-	"github.com/aws/aws-lambda-go/events"
 	"log"
+
+	"github.com/aws/aws-lambda-go/events"
 )
 
 // S3EventBridgeEvent represents an SQS S3 event

@@ -8,12 +8,13 @@ import (
 	"duracloud/internal/db"
 	"duracloud/internal/files"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const (

@@ -7,13 +7,14 @@ import (
 	"duracloud/internal/notifications"
 	_ "embed"
 	"fmt"
+	"log"
+	"os"
+	"text/template"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
-	"log"
-	"os"
-	"text/template"
 )
 
 var (
@@ -30,17 +31,17 @@ var (
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
+		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
 	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
 	if err != nil {
-		log.Fatalf("Unable to get AWS account ID: %v", err)
+		panic(fmt.Sprintf("Unable to get AWS account ID: %v", err))
 	}
 
 	notificationTmpl, err = template.New("notification").Parse(notificationTemplate)
 	if err != nil {
-		log.Fatalf("Failed to parse notification template: %v", err)
+		panic(fmt.Sprintf("Failed to parse notification template: %v", err))
 	}
 
 	snsClient = sns.NewFromConfig(awsConfig)

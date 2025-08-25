@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"log"
-	"os"
-	"time"
 )
 
 var (
@@ -28,7 +28,7 @@ type ExportResponse struct {
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
-		log.Fatalf("failed to load AWS config: %v", err)
+		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
 	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")

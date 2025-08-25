@@ -5,10 +5,11 @@ import (
 	"duracloud/internal/buckets"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // BucketCreationCoordinator manages bucket creation requests to prevent interference

@@ -9,6 +9,11 @@ import (
 	"duracloud/internal/notifications"
 	_ "embed"
 	"fmt"
+	"log"
+	"os"
+	"text/template"
+	"time"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -17,10 +22,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
-	"log"
-	"os"
-	"text/template"
-	"time"
 )
 
 var (
@@ -46,17 +47,17 @@ func init() {
 		}),
 	)
 	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
+		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
 	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
 	if err != nil {
-		log.Fatalf("Unable to get AWS account ID: %v", err)
+		panic(fmt.Sprintf("Unable to get AWS account ID: %v", err))
 	}
 
 	notificationTmpl, err = template.New("notification").Parse(notificationTemplate)
 	if err != nil {
-		log.Fatalf("Failed to parse notification template: %v", err)
+		panic(fmt.Sprintf("Failed to parse notification template: %v", err))
 	}
 
 	checksumTable = os.Getenv("DYNAMODB_CHECKSUM_TABLE")

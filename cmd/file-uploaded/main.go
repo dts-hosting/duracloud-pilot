@@ -8,6 +8,11 @@ import (
 	"duracloud/internal/queues"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,10 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"log"
-	"os"
-	"strings"
-	"time"
 )
 
 var (
@@ -37,7 +38,7 @@ func init() {
 		}),
 	)
 	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
+		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
 	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")

@@ -5,12 +5,13 @@ import (
 	"crypto/rand"
 	"duracloud/internal/files"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"math/big"
-	"time"
 )
 
 // ChecksumTableId represents a string type identifier for checksum table field names
