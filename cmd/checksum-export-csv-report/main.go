@@ -7,19 +7,19 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"io"
-	"log"
-	"os"
-	"strings"
-	"time"
 )
 
 type AttributeValue map[string]string
@@ -77,9 +77,9 @@ func getExportArn(ctx context.Context, prefix string) (exportArn string, err err
 	var firstObject string
 	if len(result.CommonPrefixes) > 0 {
 		firstObject = aws.ToString(result.CommonPrefixes[0].Prefix)
-		fmt.Sprintf("Found export %s", firstObject)
+		log.Printf("Found export %s", firstObject)
 	} else {
-		fmt.Sprintf("Managed Bucket %s is empty.", managedBucketName)
+		log.Printf("Managed Bucket %s is empty.", managedBucketName)
 	}
 
 	return firstObject, nil
@@ -93,13 +93,17 @@ func getExportDataFile(ctx context.Context, key string) (output string, err erro
 	if err != nil {
 		log.Fatalf("failed to get object, %v", err)
 	}
-	defer obj.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(obj.Body)
 
 	gzr, err := gzip.NewReader(obj.Body)
 	if err != nil {
 		log.Fatalf("failed to create gzip reader: %v", err)
 	}
-	defer gzr.Close()
+	defer func(gzr *gzip.Reader) {
+		_ = gzr.Close()
+	}(gzr)
 
 	dec := json.NewDecoder(gzr)
 
