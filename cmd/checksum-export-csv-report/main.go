@@ -22,8 +22,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type AttributeValue map[string]string
-type Item map[string]AttributeValue
+var (
+	accountID         string
+	awsCtx            accounts.AWSContext
+	bucketPrefix      string
+	managedBucketName string
+	prefix            string
+	region            string
+	s3Client          *s3.Client
+	today             string
+)
 
 type ManifestEntry struct {
 	ItemCount     int    `json:"itemCount"`
@@ -43,16 +51,88 @@ type ExportRecord struct {
 	} `json:"Item"`
 }
 
-var (
-	accountID         string
-	awsCtx            accounts.AWSContext
-	bucketPrefix      string
-	managedBucketName string
-	prefix            string
-	region            string
-	s3Client          *s3.Client
-	today             string
-)
+func init() {
+	awsConfig, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatalf("Unable to load AWS config: %v", err)
+	}
+
+	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
+	if err != nil {
+		log.Fatalf("Unable to get AWS account ID: %v", err)
+	}
+
+	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
+	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
+	today = time.Now().Format("2006-01-02")
+	s3Client = s3.NewFromConfig(awsConfig)
+	awsCtx = accounts.AWSContext{
+		AccountID: accountID,
+		Region:    region,
+		StackName: bucketPrefix,
+	}
+
+}
+
+func handler(ctx context.Context, event json.RawMessage) error {
+	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
+
+	// TODO: create fixture file that can be uploaded to match for manual trigger
+	prefix = fmt.Sprintf("exports/checksum-table/%s/AWSDynamoDB/", today)
+	log.Printf("loading from %s", prefix)
+
+	arn, err := getExportArn(ctx, prefix)
+	// TODO: this logs an error then continues ... update soon.
+	if err != nil {
+		log.Printf("failed to get export arn: %v", err)
+	}
+	log.Printf("found export arn: %s", arn)
+
+	// TODO: this logs an error then continues ... update soon.
+	manifest, err := getExportManifest(ctx, arn)
+	if err != nil {
+		log.Printf("failed to get export manifest: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 10) // Limit to 10 goroutines at a time
+
+	err = parseManifest(manifest, func(entry ManifestEntry) {
+		wg.Add(1)
+		go func(e ManifestEntry) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// TODO: this reads an entire json.gz into memory as csv
+			// and returns it as a string. This may not hold-up.
+			csvData, err := getExportDataFile(ctx, e.DataFileS3Key)
+			if err != nil {
+				log.Printf("Failed to get export data for %s: %v", e.DataFileS3Key, err)
+				return // handle issue better
+			}
+
+			fileId := fmt.Sprintf("export_%s.csv", extractFileID(e.DataFileS3Key))
+			csvFilename := getCsvKey(fileId, today, arn)
+
+			if err := writeCSVFile(ctx, csvFilename, csvData); err != nil {
+				log.Printf("Failed to write CSV for %s: %v", e.DataFileS3Key, err)
+				return // handle issue better
+			}
+
+			log.Printf("Successfully processed %s", e.DataFileS3Key)
+		}(entry)
+
+	})
+
+	if err != nil {
+		log.Printf("failed to parse export data: %v", err)
+		return err
+	}
+	wg.Wait()
+
+	return nil
+}
 
 func extractFileID(key string) string {
 	filename := path.Base(key)
@@ -75,6 +155,7 @@ func getExportArn(ctx context.Context, prefix string) (exportArn string, err err
 		log.Fatalf("failed to list objects, %v", err)
 	}
 	var firstObject string
+	// TODO: this is returning "" when there are no exports. Fix soon.
 	if len(result.CommonPrefixes) > 0 {
 		firstObject = aws.ToString(result.CommonPrefixes[0].Prefix)
 		log.Printf("Found export %s", firstObject)
@@ -145,6 +226,7 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 		Bucket: aws.String(managedBucketName),
 		Key:    aws.String(key),
 	})
+	// TODO: should be returning errors
 	if err != nil {
 		log.Fatalf("failed to get object, %v", err)
 	}
@@ -158,89 +240,7 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 	return bodyString, nil
 }
 
-func handler(ctx context.Context, event json.RawMessage) error {
-	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
-
-	prefix = fmt.Sprintf("exports/checksum-table/%s/AWSDynamoDB/", today)
-	log.Printf("loading from %s", prefix)
-
-	arn, err := getExportArn(ctx, prefix)
-	if err != nil {
-		log.Printf("failed to get export arn: %v", err)
-	}
-	log.Printf("found export arn: %s", arn)
-
-	manifest, err := getExportManifest(ctx, arn)
-	if err != nil {
-		log.Printf("failed to get export manifest: %v", err)
-	}
-
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, 10) // Limit to 10 goroutines at a time
-
-	err = parseManifest(ctx, manifest, func(entry ManifestEntry) {
-		wg.Add(1)
-		go func(e ManifestEntry) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			csv, err := getExportDataFile(ctx, e.DataFileS3Key)
-			if err != nil {
-				log.Printf("Failed to get export data for %s: %v", e.DataFileS3Key, err)
-				return // probs need to handle an issue better
-			}
-
-			fileId := fmt.Sprintf("export_%s.csv", extractFileID(e.DataFileS3Key))
-			csvFilename := getCsvKey(fileId, today, arn)
-
-			if err := writeCSVFile(ctx, csvFilename, csv); err != nil {
-				log.Printf("Failed to write CSV for %s: %v", e.DataFileS3Key, err)
-				return // probs need to handle an issue better
-			}
-
-			log.Printf("Successfully processed %s", e.DataFileS3Key)
-		}(entry)
-
-	})
-
-	if err != nil {
-		log.Printf("failed to parse export data: %v", err)
-		return err
-	}
-	wg.Wait()
-
-	return nil
-}
-
-func init() {
-	awsConfig, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
-	}
-
-	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
-	if err != nil {
-		log.Fatalf("Unable to get AWS account ID: %v", err)
-	}
-
-	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
-	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
-	today = time.Now().Format("2006-01-02")
-	s3Client = s3.NewFromConfig(awsConfig)
-	awsCtx = accounts.AWSContext{
-		AccountID: accountID,
-		Region:    region,
-		StackName: bucketPrefix,
-	}
-
-}
-
-func main() {
-	lambda.Start(handler)
-}
-
-func parseManifest(ctx context.Context, manifestBody string, processEntry func(ManifestEntry)) error {
+func parseManifest(manifestBody string, processEntry func(ManifestEntry)) error {
 	dec := json.NewDecoder(strings.NewReader(manifestBody))
 	for {
 		var e ManifestEntry
@@ -264,9 +264,14 @@ func writeCSVFile(ctx context.Context, key string, csv string) error {
 	}
 	_, err := s3Client.PutObject(ctx, input)
 
+	// TODO: should be returning errors
 	if err != nil {
 		log.Fatalf("Failed to write CSV Report to S3, %v", err)
 	}
 	log.Printf("Successfully wrote CSV Report at %s to S3", key)
 	return nil
+}
+
+func main() {
+	lambda.Start(handler)
 }
