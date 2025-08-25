@@ -7,11 +7,12 @@ import (
 	"crypto/sha256"
 	"duracloud/internal/files"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/smithy-go"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 // Mock S3 client for testing

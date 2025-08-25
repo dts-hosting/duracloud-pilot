@@ -5,12 +5,14 @@ import (
 	"duracloud/internal/accounts"
 	"duracloud/internal/buckets"
 	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"log"
-	"os"
 )
 
 var (
@@ -27,12 +29,12 @@ var (
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
+		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
 	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
 	if err != nil {
-		log.Fatalf("Unable to get AWS account ID: %v", err)
+		panic(fmt.Sprintf("Unable to get AWS account ID: %v", err))
 	}
 
 	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
@@ -55,7 +57,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
 	var s3Event events.S3Event
 	if err := json.Unmarshal(event, &s3Event); err != nil {
-		log.Fatalf("Failed to parse event: %v", err)
+		return fmt.Errorf("failed to parse event: %v", err)
 	}
 
 	e := buckets.S3EventWrapper{
@@ -70,7 +72,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	if err != nil {
 		bucketsStatus[buckets.BucketRequestedFileErrorKey] = err.Error()
 		_ = buckets.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
-		log.Fatalf("Could not retrieve buckets list: %v", err)
+		return fmt.Errorf("could not retrieve buckets list: %v", err)
 	}
 	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
@@ -98,7 +100,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	err = buckets.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
 	if err != nil {
-		log.Fatalf("Could not write bucket status to managed bucket: %v", err)
+		return fmt.Errorf("could not write bucket status to managed bucket: %v", err)
 	}
 
 	return nil

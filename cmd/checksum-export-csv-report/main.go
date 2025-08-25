@@ -54,12 +54,12 @@ type ExportRecord struct {
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
-		log.Fatalf("Unable to load AWS config: %v", err)
+		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
 	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
 	if err != nil {
-		log.Fatalf("Unable to get AWS account ID: %v", err)
+		panic(fmt.Sprintf("Unable to get AWS account ID: %v", err))
 	}
 
 	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
@@ -82,16 +82,14 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	log.Printf("loading from %s", prefix)
 
 	arn, err := getExportArn(ctx, prefix)
-	// TODO: this logs an error then continues ... update soon.
 	if err != nil {
-		log.Printf("failed to get export arn: %v", err)
+		return fmt.Errorf("failed to get export arn: %w", err)
 	}
 	log.Printf("found export arn: %s", arn)
 
-	// TODO: this logs an error then continues ... update soon.
 	manifest, err := getExportManifest(ctx, arn)
 	if err != nil {
-		log.Printf("failed to get export manifest: %v", err)
+		return fmt.Errorf("failed to get export manifest: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -152,15 +150,14 @@ func getExportArn(ctx context.Context, prefix string) (exportArn string, err err
 		Delimiter: aws.String("/"), // This tells S3 to return "folders"
 	})
 	if err != nil {
-		log.Fatalf("failed to list objects, %v", err)
+		return "", fmt.Errorf("failed to list objects: %w", err)
 	}
 	var firstObject string
-	// TODO: this is returning "" when there are no exports. Fix soon.
 	if len(result.CommonPrefixes) > 0 {
 		firstObject = aws.ToString(result.CommonPrefixes[0].Prefix)
 		log.Printf("Found export %s", firstObject)
 	} else {
-		log.Printf("Managed Bucket %s is empty.", managedBucketName)
+		return "", fmt.Errorf("managed Bucket %s is empty", managedBucketName)
 	}
 
 	return firstObject, nil
@@ -172,7 +169,7 @@ func getExportDataFile(ctx context.Context, key string) (output string, err erro
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		log.Fatalf("failed to get object, %v", err)
+		return "", fmt.Errorf("failed to get object: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -180,7 +177,7 @@ func getExportDataFile(ctx context.Context, key string) (output string, err erro
 
 	gzr, err := gzip.NewReader(obj.Body)
 	if err != nil {
-		log.Fatalf("failed to create gzip reader: %v", err)
+		return "", fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer func(gzr *gzip.Reader) {
 		_ = gzr.Close()
@@ -226,14 +223,13 @@ func getExportManifest(ctx context.Context, prefix string) (manifest string, err
 		Bucket: aws.String(managedBucketName),
 		Key:    aws.String(key),
 	})
-	// TODO: should be returning errors
 	if err != nil {
-		log.Fatalf("failed to get object, %v", err)
+		return "", fmt.Errorf("failed to get object: %w", err)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatalf("failed to read body: %v", err)
+		return "", fmt.Errorf("failed to read body: %w", err)
 	}
 
 	bodyString := string(bodyBytes)
@@ -264,9 +260,8 @@ func writeCSVFile(ctx context.Context, key string, csv string) error {
 	}
 	_, err := s3Client.PutObject(ctx, input)
 
-	// TODO: should be returning errors
 	if err != nil {
-		log.Fatalf("Failed to write CSV Report to S3, %v", err)
+		return fmt.Errorf("failed to write CSV Report to S3: %w", err)
 	}
 	log.Printf("Successfully wrote CSV Report at %s to S3", key)
 	return nil

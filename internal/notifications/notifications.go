@@ -3,10 +3,11 @@ package notifications
 import (
 	"bytes"
 	"context"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sns"
 	"log"
 	"text/template"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
 )
 
 // SNSNotification represents an abstraction for a notification to be published via AWS SNS.
