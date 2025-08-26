@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -21,8 +20,7 @@ import (
 )
 
 var (
-	managedBucketName string
-	s3Client          *s3.Client
+	s3Client *s3.Client
 )
 
 type ExportRecord struct {
@@ -56,7 +54,6 @@ func init() {
 		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
-	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
 	s3Client = s3.NewFromConfig(awsConfig)
 }
 
@@ -72,17 +69,20 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 
 	record := s3Event.Records[0]
+	bucketName := record.S3.Bucket.Name
 	objectKey := record.S3.Object.Key
 
-	log.Printf("Processing export file: %s", objectKey)
+	log.Printf("Bucket: %s, Export file: %s", bucketName, objectKey)
 
 	// Extract export info from the object key
 	exportArn := extractExportArnFromKey(objectKey)
 	date := extractDateFromKey(objectKey)
 
+	log.Printf("Export ARN: %s, Date: %s", exportArn, date)
+
 	// Process the single file
 	// TODO: handle empty files (0 bytes unzipped)
-	csvData, err := getExportDataFile(ctx, objectKey)
+	csvData, err := getExportDataFile(ctx, bucketName, objectKey)
 	if err != nil {
 		return fmt.Errorf("failed to get export data for %s: %w", objectKey, err)
 	}
@@ -91,7 +91,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	fileId := extractFileID(objectKey)
 	csvFilename := getCsvKey(fileId, date, exportArn)
 
-	if err := writeCSVFile(ctx, csvFilename, csvData); err != nil {
+	if err := writeCSVFile(ctx, bucketName, csvFilename, csvData); err != nil {
 		return fmt.Errorf("failed to write CSV for %s: %w", objectKey, err)
 	}
 
@@ -127,9 +127,9 @@ func getCsvKey(id string, date string, exportId string) string {
 	return fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportId, id)
 }
 
-func getExportDataFile(ctx context.Context, key string) (output string, err error) {
+func getExportDataFile(ctx context.Context, bucket string, key string) (output string, err error) {
 	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(managedBucketName),
+		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
@@ -181,9 +181,9 @@ func getExportDataFile(ctx context.Context, key string) (output string, err erro
 	return b.String(), nil
 }
 
-func writeCSVFile(ctx context.Context, key string, csv string) error {
+func writeCSVFile(ctx context.Context, bucket string, key string, csv string) error {
 	input := &s3.PutObjectInput{
-		Bucket: aws.String(managedBucketName),
+		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
 		Body:   strings.NewReader(csv),
 	}

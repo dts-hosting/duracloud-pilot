@@ -213,10 +213,6 @@ Resources:
       Architectures:
         - !Ref LambdaArchitecture
       Description: DuraCloud function that writes CSV Reports of DynamoDB table exports
-      Environment:
-        Variables:
-          # NOTE: we can't "!Ref S3ManagedBucket" here because it's dependent
-          S3_MANAGED_BUCKET: !Sub "${AWS::StackName}-managed"
       ImageUri:
         !If [
           ChecksumExportCSVReportUseExternalImage,

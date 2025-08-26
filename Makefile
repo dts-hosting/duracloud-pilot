@@ -94,6 +94,10 @@ pull: ## Pull required docker images
 	@docker pull public.ecr.aws/docker/library/golang:1.24
 	@docker pull public.ecr.aws/lambda/provided:al2023
 
+.PHONY: report-csv
+report-csv: ## Generate a checksum csv report
+	@aws s3 cp $(file) s3://$(stack)-managed/exports/checksum-table/2025-08-25/AWSDynamoDB/01234567890123456789/data/abcdef123456.json.gz
+
 .PHONY: test
 test: ## Run all tests and cleanup resources
 	@STACK_NAME=$(stack) go test -v ./...
