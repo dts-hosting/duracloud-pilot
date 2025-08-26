@@ -215,7 +215,8 @@ Resources:
       Description: DuraCloud function that writes CSV Reports of DynamoDB table exports
       Environment:
         Variables:
-          S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+          # NOTE: we can't "!Ref S3ManagedBucket" here because it's dependent
+          S3_MANAGED_BUCKET: !Sub "${AWS::StackName}-managed"
       ImageUri:
         !If [
           ChecksumExportCSVReportUseExternalImage,
@@ -240,11 +241,11 @@ Resources:
                 - s3:ListBucketMultipartUploads
                 - s3:ListMultipartUploadParts
               Resource:
-                - !Sub "${S3ManagedBucket.Arn}/exports/*"
+                - !Sub "arn:aws:s3:::${AWS::StackName}-managed/exports/*"
             - Effect: Allow
               Action:
                 - s3:ListBucket
-              Resource: !GetAtt S3ManagedBucket.Arn
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-managed"
       Timeout: 900
 
   ChecksumFailureFunction:
@@ -717,16 +718,6 @@ Resources:
         - Arn: !GetAtt ChecksumExporterFunction.Arn
           Id: "ChecksumExporterTarget"
 
-  EventsChecksumExportCSVReportSchedule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: "Trigger monthly DynamoDB checksum table CSV reports"
-      ScheduleExpression: "cron(0 6 2 * ? *)" # 2nd day of month at 6 AM UTC (24 hours after JSON exports generated)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt ChecksumExportCSVReportFunction.Arn
-          Id: "ChecksumExportCSVReportTarget"
-
   EventsReportGeneratorSchedule:
     Type: AWS::Events::Rule
     Properties:
@@ -869,13 +860,14 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventsChecksumExporterSchedule.Arn
 
-  LambdaChecksumExportCSVReportInvokePermission:
+  LambdaS3ManagedBucketInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt ChecksumExportCSVReportFunction.Arn
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt EventsChecksumExportCSVReportSchedule.Arn
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt S3ManagedBucket.Arn
 
   LambdaDynamoDBChecksumFailureSource:
     Type: AWS::Lambda::EventSourceMapping
@@ -999,15 +991,21 @@ Resources:
           - Event: s3:ObjectCreated:*
             Function: !GetAtt BucketRequestedFunction.Arn
 
-  S3LogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${AWS::StackName}-logs"
-
   S3ManagedBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ChecksumExportCSVReportFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: "exports/checksum-table/"
+                  - Name: suffix
+                    Value: ".json.gz"
       LifecycleConfiguration:
         Rules:
           - Id: "DeleteAfter30Days"
