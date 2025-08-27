@@ -3,15 +3,13 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"duracloud/internal/exports"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"path"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -23,31 +21,6 @@ var (
 	s3Client *s3.Client
 )
 
-type ExportRecord struct {
-	Item struct {
-		BucketName          struct{ S string }  `json:"BucketName"`
-		ObjectKey           struct{ S string }  `json:"ObjectKey"`
-		Checksum            struct{ S string }  `json:"Checksum"`
-		LastChecksumSuccess struct{ BOOL bool } `json:"LastChecksumSuccess"`
-		LastChecksumDate    struct{ S string }  `json:"LastChecksumDate"`
-		LastChecksumMessage struct{ S string }  `json:"LastChecksumMessage"`
-	} `json:"Item"`
-}
-
-// S3Event represents an S3 event from Lambda
-type S3Event struct {
-	Records []struct {
-		S3 struct {
-			Bucket struct {
-				Name string `json:"name"`
-			} `json:"bucket"`
-			Object struct {
-				Key string `json:"key"`
-			} `json:"object"`
-		} `json:"s3"`
-	} `json:"Records"`
-}
-
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
@@ -58,7 +31,7 @@ func init() {
 }
 
 func handler(ctx context.Context, event json.RawMessage) error {
-	var s3Event S3Event
+	var s3Event exports.S3Event
 
 	if err := json.Unmarshal(event, &s3Event); err != nil {
 		return fmt.Errorf("failed to parse S3 event: %w", err)
@@ -68,15 +41,21 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		return fmt.Errorf("no S3 records in event")
 	}
 
-	record := s3Event.Records[0]
-	bucketName := record.S3.Bucket.Name
-	objectKey := record.S3.Object.Key
+	bucketName := s3Event.BucketName()
+	objectKey := s3Event.ObjectKey()
+	fileId := s3Event.FileId()
 
-	log.Printf("Bucket: %s, Export file: %s", bucketName, objectKey)
+	log.Printf("Bucket: %s, Key: %s, Id: %s", bucketName, objectKey, fileId)
 
-	// Extract export info from the object key
-	exportArn := extractExportArnFromKey(objectKey)
-	date := extractDateFromKey(objectKey)
+	exportArn, err := s3Event.ObjectExportArn()
+	if err != nil {
+		return fmt.Errorf("failed to extract export ARN: %w", err)
+	}
+
+	date, err := s3Event.ObjectDate()
+	if err != nil {
+		return fmt.Errorf("failed to extract date: %w", err)
+	}
 
 	log.Printf("Export ARN: %s, Date: %s", exportArn, date)
 
@@ -88,7 +67,6 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	}
 
 	// TODO: add unique element to CSV filename if grouping by bucket
-	fileId := extractFileID(objectKey)
 	csvFilename := getCsvKey(fileId, date, exportArn)
 
 	if err := writeCSVFile(ctx, bucketName, csvFilename, csvData); err != nil {
@@ -97,30 +75,6 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	log.Printf("Successfully processed %s", objectKey)
 	return nil
-}
-
-func extractFileID(key string) string {
-	filename := path.Base(key)
-	id := strings.TrimSuffix(filename, ".json.gz")
-	return id
-}
-
-func extractExportArnFromKey(key string) string {
-	// Extract from path like: exports/checksum-table/2025-08-25/AWSDynamoDB/01234567890123456789/data/file.json.gz
-	parts := strings.Split(key, "/")
-	if len(parts) >= 5 {
-		return parts[4] // The export ARN part
-	}
-	return "unknown"
-}
-
-func extractDateFromKey(key string) string {
-	// Extract from path like: exports/checksum-table/2025-08-25/AWSDynamoDB/...
-	parts := strings.Split(key, "/")
-	if len(parts) >= 3 {
-		return parts[2] // The date part
-	}
-	return time.Now().Format("2006-01-02")
 }
 
 func getCsvKey(id string, date string, exportId string) string {
@@ -152,12 +106,10 @@ func getExportDataFile(ctx context.Context, bucket string, key string) (output s
 	var b strings.Builder
 	w := csv.NewWriter(&b)
 
-	_ = w.Write([]string{
-		"BucketName,ObjectKey,Checksum,LastChecksumSuccess,LastChecksumDate,LastChecksumMessage",
-	})
+	_ = w.Write(exports.ExportHeaders)
 
 	for {
-		var rec ExportRecord
+		var rec exports.ExportRecord
 		if err := dec.Decode(&rec); err != nil {
 			if err == io.EOF {
 				break
@@ -165,14 +117,7 @@ func getExportDataFile(ctx context.Context, bucket string, key string) (output s
 			return "", err
 		}
 
-		_ = w.Write([]string{
-			rec.Item.BucketName.S,
-			rec.Item.ObjectKey.S,
-			rec.Item.Checksum.S,
-			strconv.FormatBool(rec.Item.LastChecksumSuccess.BOOL),
-			rec.Item.LastChecksumDate.S,
-			rec.Item.LastChecksumMessage.S,
-		})
+		_ = w.Write(rec.ToCSVRow())
 		w.Flush()
 	}
 	if err := w.Error(); err != nil {
