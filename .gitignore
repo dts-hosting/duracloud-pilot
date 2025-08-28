@@ -8,6 +8,7 @@
 *.html
 buckets.txt
 CLAUDE.md
+event.json
 dist
 docs/
 !docs-src/src/content/docs/

@@ -1,20 +1,14 @@
 package main
 
 import (
-	"compress/gzip"
 	"context"
-	"duracloud/internal/accounts"
+	"duracloud/internal/exports"
+	"duracloud/internal/files"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"path"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -23,33 +17,8 @@ import (
 )
 
 var (
-	accountID         string
-	awsCtx            accounts.AWSContext
-	bucketPrefix      string
-	managedBucketName string
-	prefix            string
-	region            string
-	s3Client          *s3.Client
-	today             string
+	s3Client *s3.Client
 )
-
-type ManifestEntry struct {
-	ItemCount     int    `json:"itemCount"`
-	MD5Checksum   string `json:"md5Checksum"`
-	ETag          string `json:"etag"`
-	DataFileS3Key string `json:"dataFileS3Key"`
-}
-
-type ExportRecord struct {
-	Item struct {
-		BucketName          struct{ S string }  `json:"BucketName"`
-		ObjectKey           struct{ S string }  `json:"ObjectKey"`
-		Checksum            struct{ S string }  `json:"Checksum"`
-		LastChecksumSuccess struct{ BOOL bool } `json:"LastChecksumSuccess"`
-		LastChecksumDate    struct{ S string }  `json:"LastChecksumDate"`
-		LastChecksumMessage struct{ S string }  `json:"LastChecksumMessage"`
-	} `json:"Item"`
-}
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
@@ -57,213 +26,107 @@ func init() {
 		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
 	}
 
-	accountID, err = accounts.GetAccountID(context.Background(), awsConfig)
-	if err != nil {
-		panic(fmt.Sprintf("Unable to get AWS account ID: %v", err))
-	}
-
-	bucketPrefix = os.Getenv("S3_BUCKET_PREFIX")
-	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
-	today = time.Now().Format("2006-01-02")
 	s3Client = s3.NewFromConfig(awsConfig)
-	awsCtx = accounts.AWSContext{
-		AccountID: accountID,
-		Region:    region,
-		StackName: bucketPrefix,
-	}
-
 }
 
+// TODO: one file in, one file out. However we may want to create
+// 1 file per bucket in the future if these export files are large.
 func handler(ctx context.Context, event json.RawMessage) error {
-	ctx = context.WithValue(ctx, accounts.AWSContextKey, awsCtx)
+	var s3Event exports.S3Event
 
-	// TODO: create fixture file that can be uploaded to match for manual trigger
-	prefix = fmt.Sprintf("exports/checksum-table/%s/AWSDynamoDB/", today)
-	log.Printf("loading from %s", prefix)
-
-	arn, err := getExportArn(ctx, prefix)
-	if err != nil {
-		return fmt.Errorf("failed to get export arn: %w", err)
-	}
-	log.Printf("found export arn: %s", arn)
-
-	manifest, err := getExportManifest(ctx, arn)
-	if err != nil {
-		return fmt.Errorf("failed to get export manifest: %w", err)
+	if err := json.Unmarshal(event, &s3Event); err != nil {
+		return fmt.Errorf("failed to parse S3 event: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, 10) // Limit to 10 goroutines at a time
+	if len(s3Event.Records) == 0 {
+		return fmt.Errorf("no S3 records in event")
+	}
 
-	err = parseManifest(manifest, func(entry ManifestEntry) {
-		wg.Add(1)
-		go func(e ManifestEntry) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
+	bucketName := s3Event.BucketName()
+	objectKey := s3Event.ObjectKey()
+	fileId := s3Event.FileId()
 
-			// TODO: this reads an entire json.gz into memory as csv
-			// and returns it as a string. This may not hold-up.
-			csvData, err := getExportDataFile(ctx, e.DataFileS3Key)
-			if err != nil {
-				log.Printf("Failed to get export data for %s: %v", e.DataFileS3Key, err)
-				return // handle issue better
-			}
+	log.Printf("Bucket: %s, Key: %s, Id: %s", bucketName, objectKey, fileId)
 
-			fileId := fmt.Sprintf("export_%s.csv", extractFileID(e.DataFileS3Key))
-			csvFilename := getCsvKey(fileId, today, arn)
+	exportArn, err := s3Event.ObjectExportArn()
+	if err != nil {
+		return fmt.Errorf("failed to extract export ARN: %w", err)
+	}
 
-			if err := writeCSVFile(ctx, csvFilename, csvData); err != nil {
-				log.Printf("Failed to write CSV for %s: %v", e.DataFileS3Key, err)
-				return // handle issue better
-			}
+	date, err := s3Event.ObjectDate()
+	if err != nil {
+		return fmt.Errorf("failed to extract date: %w", err)
+	}
 
-			log.Printf("Successfully processed %s", e.DataFileS3Key)
-		}(entry)
+	log.Printf("Export ARN: %s, Date: %s", exportArn, date)
 
+	reader, err := files.DownloadObject(ctx, s3Client, bucketName, objectKey, true)
+	if err != nil {
+		return fmt.Errorf("failed to download export data for %s: %w", objectKey, err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	csvFile, err := os.CreateTemp("", "export-*.csv")
+	if err != nil {
+		return fmt.Errorf("failed to create temp CSV file: %w", err)
+	}
+	defer func() { _ = os.Remove(csvFile.Name()) }()
+
+	csvWriter := csv.NewWriter(csvFile)
+	if err := csvWriter.Write(exports.ExportHeaders); err != nil {
+		_ = csvFile.Close()
+		return fmt.Errorf("failed to write CSV headers: %w", err)
+	}
+
+	recordCount, err := exports.ProcessExport(reader, func(rec *exports.ExportRecord) error {
+		if err := csvWriter.Write(rec.ToCSVRow()); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+		csvWriter.Flush()
+		return csvWriter.Error()
 	})
 
 	if err != nil {
-		log.Printf("failed to parse export data: %v", err)
-		return err
+		_ = csvFile.Close()
+		return fmt.Errorf("failed to process export data for %s: %w", objectKey, err)
 	}
-	wg.Wait()
 
-	return nil
-}
-
-func extractFileID(key string) string {
-	filename := path.Base(key)
-	id := strings.TrimSuffix(filename, ".json.gz")
-	return id
-}
-
-func getCsvKey(id string, date string, exportId string) string {
-	return fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportId, id)
-}
-
-func getExportArn(ctx context.Context, prefix string) (exportArn string, err error) {
-	result, err := s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-		Bucket:    aws.String(managedBucketName),
-		Prefix:    aws.String(prefix),
-		MaxKeys:   aws.Int32(1),
-		Delimiter: aws.String("/"), // This tells S3 to return "folders"
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to list objects: %w", err)
+	csvWriter.Flush()
+	if err := csvWriter.Error(); err != nil {
+		_ = csvFile.Close()
+		return fmt.Errorf("CSV writer error: %w", err)
 	}
-	var firstObject string
-	if len(result.CommonPrefixes) > 0 {
-		firstObject = aws.ToString(result.CommonPrefixes[0].Prefix)
-		log.Printf("Found export %s", firstObject)
+
+	if recordCount == 0 {
+		log.Printf("Empty file processed: %s (headers only)", objectKey)
 	} else {
-		return "", fmt.Errorf("managed Bucket %s is empty", managedBucketName)
+		log.Printf("Processed %d records from %s", recordCount, objectKey)
 	}
 
-	return firstObject, nil
-}
+	csvFilename := fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportArn, fileId)
 
-func getExportDataFile(ctx context.Context, key string) (output string, err error) {
-	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(managedBucketName),
-		Key:    aws.String(key),
-	})
+	// Close the write handle before reopening for read
+	_ = csvFile.Close()
+
+	uploadFile, err := os.Open(csvFile.Name())
 	if err != nil {
-		return "", fmt.Errorf("failed to get object: %w", err)
+		return fmt.Errorf("failed to reopen CSV file: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(obj.Body)
+	defer func() { _ = uploadFile.Close() }()
 
-	gzr, err := gzip.NewReader(obj.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to create gzip reader: %w", err)
-	}
-	defer func(gzr *gzip.Reader) {
-		_ = gzr.Close()
-	}(gzr)
-
-	dec := json.NewDecoder(gzr)
-
-	var b strings.Builder
-	w := csv.NewWriter(&b)
-
-	_ = w.Write([]string{
-		"BucketName,ObjectKey,Checksum,LastChecksumSuccess,LastChecksumDate,LastChecksumMessage",
-	})
-
-	for {
-		var rec ExportRecord
-		if err := dec.Decode(&rec); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return "", err
-		}
-
-		_ = w.Write([]string{
-			rec.Item.BucketName.S,
-			rec.Item.ObjectKey.S,
-			rec.Item.Checksum.S,
-			strconv.FormatBool(rec.Item.LastChecksumSuccess.BOOL),
-			rec.Item.LastChecksumDate.S,
-			rec.Item.LastChecksumMessage.S,
-		})
-		w.Flush()
-	}
-	if err := w.Error(); err != nil {
-		return "", err
-	}
-	return b.String(), nil
-}
-
-func getExportManifest(ctx context.Context, prefix string) (manifest string, err error) {
-	key := fmt.Sprintf("%smanifest-files.json", prefix)
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(managedBucketName),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to get object: %w", err)
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read body: %w", err)
-	}
-
-	bodyString := string(bodyBytes)
-	return bodyString, nil
-}
-
-func parseManifest(manifestBody string, processEntry func(ManifestEntry)) error {
-	dec := json.NewDecoder(strings.NewReader(manifestBody))
-	for {
-		var e ManifestEntry
-		if err := dec.Decode(&e); err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("failed to decode manifest entry: %w", err)
-		}
-
-		processEntry(e)
-	}
-
-	return nil
-}
-
-func writeCSVFile(ctx context.Context, key string, csv string) error {
 	input := &s3.PutObjectInput{
-		Bucket: aws.String(managedBucketName),
-		Key:    aws.String(key),
-		Body:   strings.NewReader(csv),
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(csvFilename),
+		Body:   uploadFile,
 	}
-	_, err := s3Client.PutObject(ctx, input)
 
+	_, err = s3Client.PutObject(ctx, input)
 	if err != nil {
-		return fmt.Errorf("failed to write CSV Report to S3: %w", err)
+		return fmt.Errorf("failed to upload CSV for %s: %w", objectKey, err)
 	}
-	log.Printf("Successfully wrote CSV Report at %s to S3", key)
+
+	log.Printf("Successfully wrote CSV Report at %s to S3", csvFilename)
+	log.Printf("Successfully processed %s", objectKey)
 	return nil
 }
 

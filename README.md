@@ -61,19 +61,23 @@ make file-copy file=files/create-buckets.txt bucket=your-stack-name-bucket-reque
 # Upload a file (adds record to checksum and scheduler tables)
 make file-copy file=files/upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
-# Trigger checksum verification
+# Trigger checksum verification (file must exist in bucket)
 make expire-ttl stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
-# Force a checksum failure
+# Force a checksum failure (file must exist in bucket)
 make checksum-fail stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
 
-# Delete a file (removes record from checksum and scheduler tables)
+# Delete a file (removes record from checksum and scheduler tables) (file must exist in bucket)
 make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
+
+# Generate a checksum csv report (uploads to managed bucket under fixed key)
+make report-csv file=files/abcdef123456.json.gz stack=your-stack-name
 ```
 
 ### Viewing Logs
 
 ```bash
+make logs func=checksum-export-csv-report stack=your-stack-name interval=5m
 make logs func=checksum-verification stack=your-stack-name interval=5m
 ```
 
@@ -91,12 +95,17 @@ make bucket action=delete bucket=your-stack-name-tmp
 Locally:
 
 ```bash
+cp events/checksum-export-csv-report/event.json event.json
+# update event.json to an appropriate bucket (i.e. your-stack-name)
+make invoke func=ChecksumExportCSVReportFunction event=event.json
+
 make invoke func=FileUploadedFunction event=events/file-uploaded/event.json
 ```
 
 Remotely:
 
 ```bash
+make invoke-remove func=ChecksumExportCSVReportFunction event=events/checksum-export-csv-report/event.json stack=your-stack-name
 make invoke-remote func=ChecksumExporterFunction event=events/checksum-exporter/event.json stack=your-stack-name
 ```
 

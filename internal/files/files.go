@@ -1,8 +1,10 @@
 package files
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -24,6 +26,29 @@ func (obj S3Object) URI() string {
 	return fmt.Sprintf("s3://%s/%s", obj.Bucket, obj.Key)
 }
 
+// DownloadObject returns a streaming reader for S3 object with optional gzip decompression
+func DownloadObject(ctx context.Context, s3Client *s3.Client, bucket, key string, decompress bool) (io.ReadCloser, error) {
+	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object: %w", err)
+	}
+
+	if !decompress {
+		return obj.Body, nil
+	}
+
+	gzr, err := gzip.NewReader(obj.Body)
+	if err != nil {
+		_ = obj.Body.Close()
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+
+	return &gzipReadCloser{Reader: gzr, underlying: obj.Body}, nil
+}
+
 // TryObject checks if an S3 object exists and can be accessed by performing a HeadObject operation.
 func TryObject(ctx context.Context, s3Client *s3.Client, obj S3Object) bool {
 	_, err := s3Client.HeadObject(ctx, &s3.HeadObjectInput{
@@ -31,4 +56,18 @@ func TryObject(ctx context.Context, s3Client *s3.Client, obj S3Object) bool {
 		Key:    aws.String(obj.Key),
 	})
 	return err == nil
+}
+
+type gzipReadCloser struct {
+	*gzip.Reader
+	underlying io.ReadCloser
+}
+
+func (g *gzipReadCloser) Close() error {
+	gzipErr := g.Reader.Close()
+	underlyingErr := g.underlying.Close()
+	if gzipErr != nil {
+		return gzipErr
+	}
+	return underlyingErr
 }
