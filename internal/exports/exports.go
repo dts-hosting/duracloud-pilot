@@ -1,7 +1,9 @@
 package exports
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"path"
 	"strconv"
 	"strings"
@@ -101,4 +103,30 @@ func (e *S3Event) FileId() string {
 
 func (e *S3Event) ObjectKey() string {
 	return e.Records[0].S3.Object.Key
+}
+
+// ProcessExport processes JSON export data, calling callback for each record
+// Returns the number of records processed
+func ProcessExport(reader io.Reader, callback func(*ExportRecord) error) (int, error) {
+	dec := json.NewDecoder(reader)
+	count := 0
+
+	for {
+		var rec ExportRecord
+		if err := dec.Decode(&rec); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return count, err
+		}
+
+		if callback != nil {
+			if err := callback(&rec); err != nil {
+				return count, err
+			}
+		}
+		count++
+	}
+
+	return count, nil
 }
