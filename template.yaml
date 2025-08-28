@@ -499,6 +499,26 @@ Resources:
       Timeout: 900
 
   ##### Function resources (TODO: docs for each resource)
+  CloudWatchChecksumExportCSVReportFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-export-csv-report-errors"
+      AlarmDescription: "Error generating CSV report from checksum table export"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChecksumExportCSVReportFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      AlarmActions: !If
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
+        - !Ref "AWS::NoValue"
+
   CloudWatchChecksumExporterFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -518,9 +538,6 @@ Resources:
         - EnableEmailAlertNotifications
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
-
-  # TODO: CloudWatchChecksumExportCSVReportFunctionErrorAlarm
-  # TODO: CloudWatchChecksumVerificationFunctionErrorAlarm
 
   CloudWatchChecksumVerificationFunctionConcurrencyAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -543,6 +560,26 @@ Resources:
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
       OKActions: !If
+        - EnableEmailAlertNotifications
+        - [!Ref SNSEmailAlertTopic]
+        - !Ref "AWS::NoValue"
+
+  CloudWatchChecksumVerificationFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-checksum-verification-errors"
+      AlarmDescription: "Error processing checksum verification"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChecksumVerificationFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 0
+      AlarmActions: !If
         - EnableEmailAlertNotifications
         - [!Ref SNSEmailAlertTopic]
         - !Ref "AWS::NoValue"
@@ -863,7 +900,7 @@ Resources:
       FunctionName: !GetAtt ChecksumExportCSVReportFunction.Arn
       Principal: s3.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
-      SourceArn: !GetAtt S3ManagedBucket.Arn
+      SourceArn: !Sub "arn:aws:s3:::${AWS::StackName}-managed"
 
   LambdaDynamoDBChecksumFailureSource:
     Type: AWS::Lambda::EventSourceMapping
@@ -989,6 +1026,7 @@ Resources:
 
   S3ManagedBucket:
     Type: AWS::S3::Bucket
+    DependsOn: LambdaS3ManagedBucketInvokePermission
     Properties:
       BucketName: !Sub "${AWS::StackName}-managed"
       NotificationConfiguration:
