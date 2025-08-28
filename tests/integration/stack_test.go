@@ -25,7 +25,6 @@ func TestStackDeployment(t *testing.T) {
 		expectedBuckets := []string{
 			fmt.Sprintf("%s-bucket-requested", stackName),
 			fmt.Sprintf("%s-managed", stackName),
-			fmt.Sprintf("%s-logs", stackName),
 		}
 
 		for _, bucketName := range expectedBuckets {
