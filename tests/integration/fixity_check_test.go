@@ -74,12 +74,12 @@ func TestPeriodicFixityVerification(t *testing.T) {
 		// Upload file and wait for initial processing
 		expectedChecksum := helper.UploadTestFile(t, testBucketName, testFileName, testContent)
 		initialRecord := helper.WaitForThenValidateChecksum(t, testBucketName, testFileName, expectedChecksum)
+		lastChecksumDate := initialRecord.LastChecksumDate
 
-		// Trigger verification
-		helper.TriggerVerification(t, initialRecord)
+		helper.InvokeVerificationFunction(t, initialRecord)
 
 		// Wait for verification processing and get updated record
-		updatedRecord := helper.WaitForVerification(t, testBucketName, testFileName)
+		updatedRecord := helper.WaitForVerification(t, testBucketName, testFileName, lastChecksumDate)
 
 		// Validate successful verification
 		helper.ValidateSuccessfulVerification(t, initialRecord, updatedRecord, expectedChecksum)
@@ -94,17 +94,15 @@ func TestPeriodicFixityVerification(t *testing.T) {
 		// Upload file and wait for initial processing
 		expectedChecksum := helper.UploadTestFile(t, testBucketName, testFileName, testContent)
 		initialRecord := helper.WaitForThenValidateChecksum(t, testBucketName, testFileName, expectedChecksum)
+		lastChecksumDate := initialRecord.LastChecksumDate
 
 		// Simulate corruption by modifying the stored checksum in the database
-		// This creates a realistic scenario where the file content doesn't match the stored checksum
 		corruptedRecord := helper.SimulateCorruption(t, testBucketName, testFileName)
 
-		// Trigger verification - this will calculate the checksum of the actual file
-		// and compare it to the corrupted checksum we stored, detecting the mismatch
-		helper.TriggerVerification(t, corruptedRecord)
+		helper.InvokeVerificationFunction(t, corruptedRecord)
 
 		// Wait for verification processing and get updated record
-		updatedRecord := helper.WaitForVerification(t, testBucketName, testFileName)
+		updatedRecord := helper.WaitForVerification(t, testBucketName, testFileName, lastChecksumDate)
 
 		// Validate failed verification
 		helper.ValidateFailedVerification(t, initialRecord, updatedRecord)
@@ -223,17 +221,19 @@ func TestEndToEndWorkflow(t *testing.T) {
 		t.Log("Phase 1: Initial upload and checksum storage")
 		expectedChecksum := helper.UploadTestFile(t, testBucketName, testFileName, testContent)
 		phase1Record := helper.WaitForThenValidateChecksum(t, testBucketName, testFileName, expectedChecksum)
+		lastChecksumDate := phase1Record.LastChecksumDate
 
 		// Phase 2: First verification cycle
 		t.Log("Phase 2: First verification cycle")
-		helper.TriggerVerification(t, phase1Record)
-		phase2Record := helper.WaitForVerification(t, testBucketName, testFileName)
+		helper.InvokeVerificationFunction(t, phase1Record)
+		phase2Record := helper.WaitForVerification(t, testBucketName, testFileName, lastChecksumDate)
+		lastChecksumDate = phase2Record.LastChecksumDate
 		helper.ValidateSuccessfulVerification(t, phase1Record, phase2Record, expectedChecksum)
 
 		// Phase 3: Second verification cycle (simulating long-term operation)
 		t.Log("Phase 3: Second verification cycle")
-		helper.TriggerVerification(t, phase2Record)
-		phase3Record := helper.WaitForVerification(t, testBucketName, testFileName)
+		helper.InvokeVerificationFunction(t, phase2Record)
+		phase3Record := helper.WaitForVerification(t, testBucketName, testFileName, lastChecksumDate)
 		helper.ValidateSuccessfulVerification(t, phase2Record, phase3Record, expectedChecksum)
 
 		t.Logf("Successfully completed end-to-end lifecycle test with %d verification cycles", 2)

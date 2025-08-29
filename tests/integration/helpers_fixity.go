@@ -7,6 +7,7 @@ import (
 	"duracloud/internal/buckets"
 	"duracloud/internal/db"
 	"duracloud/internal/files"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -15,13 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-)
-
-const (
-	// Default wait time for checksum generation processing
-	defaultChecksumGenerationWaitTime = 120 * time.Second
-	// Default wait time for verification processing
-	defaultVerificationWaitTime = 180 * time.Second
 )
 
 // FixityTestHelper provides helper functions for fixity check testing
@@ -79,9 +73,9 @@ func (h *FixityTestHelper) WaitForThenValidateChecksum(t *testing.T, bucketName,
 
 	// Configure wait parameters for initial checksum processing
 	cfg := DefaultWaitConfig()
-	cfg.MaxTimeout = defaultChecksumGenerationWaitTime
-	cfg.PollInterval = 3 * time.Second // Start with 3-second intervals
-	cfg.InitialDelay = 2 * time.Second // Give EventBridge a moment to process
+	cfg.MaxTimeout = 120 * time.Second
+	cfg.PollInterval = 3 * time.Second
+	cfg.InitialDelay = 2 * time.Second
 
 	// Validator function to check if the record has the expected checksum and is successful
 	validator := func(record db.ChecksumRecord) bool {
@@ -102,35 +96,20 @@ func (h *FixityTestHelper) WaitForThenValidateChecksum(t *testing.T, bucketName,
 	return record
 }
 
-// TriggerVerification manually triggers a verification by creating an expired TTL record
-func (h *FixityTestHelper) TriggerVerification(t *testing.T, record db.ChecksumRecord) {
-	expiredRecord := record
-	expiredRecord.NextChecksumDate = time.Now().Add(-1 * time.Hour) // Expired 1 hour ago
-
-	err := db.ScheduleNextVerification(h.Context, h.Clients.DynamoDB, h.SchedulerTableName, expiredRecord)
-	require.NoError(t, err, "Should schedule verification")
-
-	t.Logf("Triggered verification for %s/%s", record.BucketName, record.ObjectKey)
-}
-
 // WaitForVerification waits for verification processing and returns the updated record
-func (h *FixityTestHelper) WaitForVerification(t *testing.T, bucketName, fileName string) db.ChecksumRecord {
+func (h *FixityTestHelper) WaitForVerification(t *testing.T, bucketName, fileName string, lastChecksumDate time.Time) db.ChecksumRecord {
 	obj := files.NewS3Object(bucketName, fileName)
 
-	// Get the current record to compare timestamps later
-	initialRecord, err := db.GetChecksumRecord(h.Context, h.Clients.DynamoDB, h.ChecksumTableName, obj)
-	require.NoError(t, err, "Should retrieve initial record for comparison")
-
-	// Configure wait parameters for verification processing (longer timeout for TTL processing)
+	// Configure wait parameters
 	cfg := DefaultWaitConfig()
-	cfg.MaxTimeout = defaultVerificationWaitTime
-	cfg.PollInterval = 5 * time.Second // Start with 5-second intervals for verification
-	cfg.InitialDelay = 3 * time.Second // Give TTL processing more time to start
+	cfg.MaxTimeout = 60 * time.Second
+	cfg.PollInterval = 2 * time.Second
+	cfg.InitialDelay = 1 * time.Second
 
 	// Validator function to check if verification has been processed
 	// We check if LastChecksumDate has been updated (indicating verification occurred)
 	validator := func(record db.ChecksumRecord) bool {
-		return record.LastChecksumDate.After(initialRecord.LastChecksumDate)
+		return record.LastChecksumDate.After(lastChecksumDate)
 	}
 
 	record, success := WaitForDynamoDBRecord(t, h.Clients, h.ChecksumTableName, &obj, validator, cfg)
@@ -155,8 +134,6 @@ func (h *FixityTestHelper) ValidateSuccessfulVerification(t *testing.T, beforeRe
 	t.Logf("  After > Before: %v", afterRecord.NextChecksumDate.After(beforeRecord.NextChecksumDate))
 
 	// The NextChecksumDate should be rescheduled to a future date
-	// Note: We need to account for the fact that TriggerVerification sets an expired date
-	// so we should check that the new NextChecksumDate is in the future from now
 	now := time.Now()
 	require.True(t, afterRecord.NextChecksumDate.After(now),
 		"Next checksum date should be rescheduled to future (after %v, got %v)", now, afterRecord.NextChecksumDate)
@@ -294,6 +271,69 @@ func GenerateTestContent(size int, prefix string) string {
 	}
 
 	return content
+}
+
+// InvokeVerificationFunction directly invokes the checksum verification Lambda function
+func (h *FixityTestHelper) InvokeVerificationFunction(t *testing.T, record db.ChecksumRecord) {
+	// Create DynamoDB stream event payload similar to TTL expiry
+	event := map[string]any{
+		"Records": []map[string]any{
+			{
+				"eventID":      "test-event-id",
+				"eventName":    "REMOVE",
+				"eventVersion": "1.1",
+				"eventSource":  "aws:dynamodb",
+				"awsRegion":    "us-west-2",
+				"userIdentity": map[string]string{
+					"type":        "Service",
+					"principalId": "dynamodb.amazonaws.com",
+				},
+				"dynamodb": map[string]any{
+					"Keys": map[string]any{
+						"BucketName": map[string]string{
+							"S": record.BucketName,
+						},
+						"ObjectKey": map[string]string{
+							"S": record.ObjectKey,
+						},
+					},
+					"OldImage": map[string]any{
+						"BucketName": map[string]string{
+							"S": record.BucketName,
+						},
+						"ObjectKey": map[string]string{
+							"S": record.ObjectKey,
+						},
+						"NextChecksumDate": map[string]string{
+							"S": record.NextChecksumDate.Format(time.RFC3339),
+						},
+						"TTL": map[string]string{
+							"N": fmt.Sprintf("%d", time.Now().Unix()-3600), // Expired 1 hour ago
+						},
+					},
+					"SequenceNumber": "700000000000000000000001",
+					"SizeBytes":      100,
+					"StreamViewType": "OLD_AND_NEW_IMAGES",
+				},
+			},
+		},
+	}
+
+	// Convert to JSON payload
+	payload, err := json.Marshal(event)
+	require.NoError(t, err, "Should marshal event payload")
+
+	// Invoke the Lambda function directly
+	functionName := fmt.Sprintf("%s-ChecksumVerificationFunction", h.StackName)
+	result, err := lambdaFunctionInvoke(h.Context, h.Clients.Lambda, functionName, payload)
+	require.NoError(t, err, "Should invoke checksum verification function")
+
+	// Check for function errors
+	if result.FunctionError != nil {
+		t.Errorf("Lambda function returned error: %s", string(result.Payload))
+	}
+
+	t.Logf("Successfully invoked verification function for %s/%s", record.BucketName, record.ObjectKey)
 }
 
 // ValidateChecksumRecord validates all fields of a checksum record

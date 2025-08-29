@@ -14,18 +14,18 @@
       "dynamodb": {
         "ApproximateCreationDateTime": 1701388800,
         "Keys": {
-          "Bucket": {
+          "BucketName": {
             "S": "my-stack-data-bucket"
           },
-          "Object": {
+          "ObjectKey": {
             "S": "documents/file.pdf"
           }
         },
         "OldImage": {
-          "Bucket": {
+          "BucketName": {
             "S": "my-stack-data-bucket"
           },
-          "Object": {
+          "ObjectKey": {
             "S": "documents/file.pdf"
           },
           "NextChecksumDate": {
