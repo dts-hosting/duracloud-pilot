@@ -30,6 +30,8 @@ STACK_NAME=your-profile-name
 ```bash
 make pull
 make build
+make deploy-only stack=your-stack-name
+# you can run the build and deploy tasks in one step using:
 make deploy stack=your-stack-name
 ```
 
@@ -66,9 +68,10 @@ make expire-ttl stack=your-stack-name file=upload-me.txt bucket=your-stack-name-
 
 # Force a checksum failure (file must exist in bucket)
 make checksum-fail stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
+make logs func=checksum-failure stack=your-stack-name interval=5m
 
 # Delete a file (removes record from checksum and scheduler tables) (file must exist in bucket)
-make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
+make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123 # confirm triggered
 
 # Generate a checksum csv report (uploads to managed bucket under fixed key)
 make report-csv file=files/abcdef123456.json.gz stack=your-stack-name
