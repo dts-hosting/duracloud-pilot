@@ -20,6 +20,8 @@ func TestInitialChecksumStorage(t *testing.T) {
 	testBucketName := helper.CreateTestBucket(t, "test-initial")
 
 	t.Run("SuccessfulChecksumCalculationAndStorage", func(t *testing.T) {
+		t.Parallel()
+
 		testFileName := "test-checksum-storage.txt"
 		testContent := "Hello, DuraCloud fixity test!"
 
@@ -33,6 +35,8 @@ func TestInitialChecksumStorage(t *testing.T) {
 	})
 
 	t.Run("LargeFileChecksumCalculation", func(t *testing.T) {
+		t.Parallel()
+
 		testFileName := "large-test-file.txt"
 		// Create ~1MB test content using helper
 		testContent := GenerateTestContent(1000000, "This is test data for large file checksum calculation.")
@@ -47,6 +51,8 @@ func TestInitialChecksumStorage(t *testing.T) {
 	})
 
 	t.Run("ZeroByteFileHandling", func(t *testing.T) {
+		t.Parallel()
+
 		testFileName := "empty-file.txt"
 		testContent := ""
 
@@ -68,6 +74,8 @@ func TestPeriodicFixityVerification(t *testing.T) {
 	testBucketName := helper.CreateTestBucket(t, "test-verification")
 
 	t.Run("SuccessfulChecksumVerification", func(t *testing.T) {
+		t.Parallel()
+
 		testFileName := "test-verification.txt"
 		testContent := "Content for verification test"
 
@@ -88,6 +96,8 @@ func TestPeriodicFixityVerification(t *testing.T) {
 	})
 
 	t.Run("ChecksumMismatchDetection", func(t *testing.T) {
+		t.Parallel()
+
 		testFileName := "test-mismatch.txt"
 		testContent := "Content for corruption test"
 
