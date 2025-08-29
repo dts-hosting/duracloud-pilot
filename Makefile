@@ -104,7 +104,7 @@ report-csv: ## Generate a checksum csv report
 
 .PHONY: test
 test: ## Run all tests and cleanup resources
-	@STACK_NAME=$(stack) go test -v ./...
+	@STACK_NAME=$(stack) go test -count 1 -v ./...
 	@echo -e "\n\n\nTests ran successfully cleaning up ...\n\n\n"
 	$(MAKE) cleanup stack=$(stack)
 
