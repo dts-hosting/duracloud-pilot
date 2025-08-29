@@ -291,6 +291,16 @@ func lambdaFunctionExists(ctx context.Context, lambdaClient *lambda.Client, func
 	return err == nil
 }
 
+func lambdaFunctionInvoke(ctx context.Context, lambdaClient *lambda.Client, functionName string, payload []byte) (*lambda.InvokeOutput, error) {
+	input := &lambda.InvokeInput{
+		FunctionName: aws.String(functionName),
+		Payload:      payload,
+	}
+
+	result, err := lambdaClient.Invoke(ctx, input)
+	return result, err
+}
+
 func uploadRequestAndWait(t *testing.T, ctx context.Context, s3Client *s3.Client, stackName string, bucketNames []string, waitTime time.Duration) {
 	// Use the new coordination system directly for better performance
 	err := CreateBucketsWithCoordination(t, ctx, s3Client, stackName, bucketNames, waitTime)

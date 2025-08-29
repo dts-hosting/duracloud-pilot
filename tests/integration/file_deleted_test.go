@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,10 +66,7 @@ func TestFileDeletedWorkflow(t *testing.T) {
 		]
 	}`, time.Now().Format(time.RFC3339), obj.Bucket, obj.Bucket, obj.Key)
 
-	_, err = clients.Lambda.Invoke(ctx, &lambda.InvokeInput{
-		FunctionName: aws.String(functionName),
-		Payload:      []byte(eventPayload),
-	})
+	_, err = lambdaFunctionInvoke(ctx, clients.Lambda, functionName, []byte(eventPayload))
 	require.NoError(t, err, "Failed to invoke file-deleted lambda")
 
 	// Wait for records to be deleted
