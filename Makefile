@@ -42,6 +42,10 @@ delete: ## Delete a deployed stack
 deploy: build ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
+.PHONY: deploy-only
+deploy-only: ## Deploy stack to AWS w/o running build first
+	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
+
 .PHONY: docs-build
 docs-build: ## Build the docs site
 	@cd docs-src && npm run build
