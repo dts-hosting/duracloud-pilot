@@ -34,6 +34,9 @@ const (
 	InventoryConfigId                = "inventory"
 	LifeCycleTransitionToGlacierDays = 7
 	NonCurrentVersionExpirationDays  = 2
+	PublicTagValue                   = "Public"
+	ReplicationTagValue              = "Replication"
+	StandardTagValue                 = "Standard"
 )
 
 var (

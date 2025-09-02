@@ -74,8 +74,8 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		_ = buckets.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
 		return fmt.Errorf("could not retrieve buckets list: %v", err)
 	}
-	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 
+	log.Printf("Retrieved %d buckets list from request file", len(requestedBuckets))
 	resultChan := make(chan map[string]string, len(requestedBuckets))
 
 	for _, requestedBucketName := range requestedBuckets {
@@ -127,7 +127,7 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 		return
 	}
 
-	err = buckets.AddBucketTags(ctx, s3Client, fullBucketName, bucket.Prefix, "Standard")
+	err = buckets.AddBucketTags(ctx, s3Client, fullBucketName, bucket.Prefix, buckets.StandardTagValue)
 	if err != nil {
 		localStatus[fullBucketName] = err.Error()
 		_ = rollback(ctx, s3Client, fullBucketName)
@@ -160,7 +160,7 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 			return
 		}
 
-		err = buckets.AddBucketTags(ctx, s3Client, fullBucketName, bucket.Prefix, "Public")
+		err = buckets.AddBucketTags(ctx, s3Client, fullBucketName, bucket.Prefix, buckets.PublicTagValue)
 		if err != nil {
 			localStatus[fullBucketName] = err.Error()
 			_ = rollback(ctx, s3Client, fullBucketName)
@@ -209,7 +209,7 @@ func processBucket(ctx context.Context, s3Client *s3.Client, bucket buckets.Buck
 		return
 	}
 
-	err = buckets.AddBucketTags(ctx, s3Client, replicationBucketName, bucket.Prefix, "Replication")
+	err = buckets.AddBucketTags(ctx, s3Client, replicationBucketName, bucket.Prefix, buckets.ReplicationTagValue)
 	if err != nil {
 		localStatus[replicationBucketName] = err.Error()
 		_ = rollback(ctx, s3Client, fullBucketName)
