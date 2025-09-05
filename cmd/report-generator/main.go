@@ -49,8 +49,13 @@ func handler(ctx context.Context) error {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
 
+	if reportHTML == "" {
+		log.Println("No buckets found for report generation")
+		return nil
+	}
+
 	// Upload report to managed bucket
-	reportKey := fmt.Sprintf("storage-reports/%s-storage-report.html",
+	reportKey := fmt.Sprintf("reports/%s-storage-report.html",
 		time.Now().Format("2006-01-02T15-04-05"))
 
 	err = generator.UploadReport(ctx, managedBucketName, reportKey, reportHTML)

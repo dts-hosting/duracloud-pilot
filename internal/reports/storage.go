@@ -5,6 +5,7 @@ import (
 	"context"
 	"duracloud/internal/buckets"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -40,7 +41,7 @@ type PrefixStats struct {
 type ReportData struct {
 	GeneratedAt  time.Time
 	StackName    string
-	TotalBuckets int
+	TotalBuckets int64
 	TotalSize    int64
 	TotalObjects int64
 	BucketStats  []BucketStats
@@ -55,22 +56,29 @@ func NewStorageReportGenerator(s3Client *s3.Client, cwClient *cloudwatch.Client,
 }
 
 func (g *StorageReportGenerator) GenerateReport(ctx context.Context) (string, error) {
-	// Step 1: Get eligible buckets by tags
+	log.Println("Getting eligible buckets")
 	reportBuckets, err := g.getEligibleBuckets(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get eligible buckets: %w", err)
 	}
 
-	// Step 2: Collect statistics for each bucket in parallel
+	if len(reportBuckets) == 0 {
+		log.Println("No eligible buckets found")
+		return "", nil
+	}
+
+	log.Printf("Collecting statistics for %d buckets\n", len(reportBuckets))
 	bucketStats, err := g.collectBucketStatistics(ctx, reportBuckets)
 	if err != nil {
 		return "", fmt.Errorf("failed to collect bucket statistics: %w", err)
 	}
 
-	// Step 3: Calculate aggregates
+	log.Println("Calculating aggregates")
 	reportData := g.calculateAggregates(bucketStats)
 
-	// Step 4: Generate HTML report
+	log.Printf("Report data: %+v\n", reportData)
+
+	log.Println("Generating HTML report")
 	htmlReport, err := g.generateHTML(reportData)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate HTML: %w", err)
@@ -87,9 +95,11 @@ func (g *StorageReportGenerator) getEligibleBuckets(ctx context.Context) ([]stri
 
 	var eligibleBuckets []string
 
-	// Check each bucket for required tags
 	for _, bucket := range result.Buckets {
 		bucketName := aws.ToString(bucket.Name)
+		if !strings.HasPrefix(bucketName, g.stackName) {
+			continue
+		}
 
 		tags, err := g.getBucketTags(ctx, bucketName)
 		if err != nil {
@@ -97,6 +107,7 @@ func (g *StorageReportGenerator) getEligibleBuckets(ctx context.Context) ([]stri
 		}
 
 		if g.isEligibleBucket(tags) {
+			log.Printf("Found eligible bucket: %s\n", bucketName)
 			eligibleBuckets = append(eligibleBuckets, bucketName)
 		}
 	}
@@ -121,12 +132,16 @@ func (g *StorageReportGenerator) getBucketTags(ctx context.Context, bucketName s
 }
 
 func (g *StorageReportGenerator) isEligibleBucket(tags map[string]string) bool {
-	_, hasApplicationTag := tags[buckets.ApplicationTagValue]
+	application, hasApplicationTag := tags[buckets.ApplicationTagKey]
 	if !hasApplicationTag {
 		return false
 	}
 
-	bucketType, hasBucketType := tags["BucketType"]
+	if application != buckets.ApplicationTagValue {
+		return false
+	}
+
+	bucketType, hasBucketType := tags[buckets.BucketTypeTagKey]
 	if !hasBucketType {
 		return false
 	}
@@ -135,7 +150,7 @@ func (g *StorageReportGenerator) isEligibleBucket(tags map[string]string) bool {
 		return false
 	}
 
-	stackName, hasStackName := tags["StackName"]
+	stackName, hasStackName := tags[buckets.StackNameTagKey]
 	return hasStackName && stackName == g.stackName
 }
 
@@ -145,6 +160,7 @@ func (g *StorageReportGenerator) collectBucketStatistics(ctx context.Context, bu
 	errorChan := make(chan error, len(buckets))
 
 	for _, bucketName := range buckets {
+		log.Printf("Collecting stats for bucket: %s\n", bucketName)
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
@@ -289,36 +305,38 @@ func (g *StorageReportGenerator) getStorageMetrics(ctx context.Context, bucketNa
 }
 
 func (g *StorageReportGenerator) getPrefixStatistics(ctx context.Context, bucketName string) ([]PrefixStats, error) {
-	// List objects to get top-level prefixes
-	result, err := g.s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+	var prefixStats []PrefixStats
+
+	paginator := s3.NewListObjectsV2Paginator(g.s3Client, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(bucketName),
 		Delimiter: aws.String("/"),
 		MaxKeys:   aws.Int32(1000),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list objects: %w", err)
-	}
 
-	var prefixStats []PrefixStats
-
-	// Process each common prefix (top-level directory)
-	for _, commonPrefix := range result.CommonPrefixes {
-		prefix := aws.ToString(commonPrefix.Prefix)
-
-		// Get statistics for this prefix by listing its contents
-		size, count, err := g.calculatePrefixStats(ctx, bucketName, prefix)
+	for paginator.HasMorePages() {
+		result, err := paginator.NextPage(ctx)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to list objects: %w", err)
 		}
 
-		prefixStats = append(prefixStats, PrefixStats{
-			Prefix:      prefix,
-			Size:        size,
-			ObjectCount: count,
-		})
+		// Process each common prefix (top-level directory) in this page
+		for _, commonPrefix := range result.CommonPrefixes {
+			prefix := aws.ToString(commonPrefix.Prefix)
+
+			// Get statistics for this prefix by listing its contents
+			size, count, err := g.calculatePrefixStats(ctx, bucketName, prefix)
+			if err != nil {
+				continue
+			}
+
+			prefixStats = append(prefixStats, PrefixStats{
+				Prefix:      prefix,
+				Size:        size,
+				ObjectCount: count,
+			})
+		}
 	}
 
-	// Sort by size descending
 	sort.Slice(prefixStats, func(i, j int) bool {
 		return prefixStats[i].Size > prefixStats[j].Size
 	})
@@ -354,12 +372,13 @@ func (g *StorageReportGenerator) calculateAggregates(bucketStats []BucketStats) 
 	report := ReportData{
 		GeneratedAt:  time.Now(),
 		StackName:    g.stackName,
-		TotalBuckets: len(bucketStats),
+		TotalBuckets: int64(len(bucketStats)),
 		BucketStats:  bucketStats,
 	}
 
 	// Calculate totals
 	for _, bucket := range bucketStats {
+		log.Printf("Calculating totals for bucket: %s\n", bucket.Name)
 		report.TotalSize += bucket.TotalSize
 		report.TotalObjects += bucket.TotalObjects
 	}
@@ -385,6 +404,8 @@ func (g *StorageReportGenerator) generateHTML(data ReportData) (string, error) {
 }
 
 func (g *StorageReportGenerator) UploadReport(ctx context.Context, bucketName, key, content string) error {
+	log.Printf("Uploading report to bucket: %s/%s\n", bucketName, key)
+
 	_, err := g.s3Client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(bucketName),
 		Key:         aws.String(key),
@@ -457,6 +478,11 @@ const htmlTemplate = `
     </div>
 
     <h2>Bucket Details</h2>
+
+    <div class="summary">
+        <p>Top-Level Prefix data (if any) will be more up to date than the aggregate totals for storage and file counts. This is because the aggregate totals are updated daily, but the prefix data is calculated when the report is generated. <i>Therefore some difference between the respective counts is normal.</i></p>
+    </div>
+
     {{range .BucketStats}}
     <div class="bucket">
         <h3>{{.Name}}</h3>

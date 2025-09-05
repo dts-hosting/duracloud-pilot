@@ -31,6 +31,7 @@ STACK_NAME=your-profile-name
 make pull
 make build
 make deploy-only stack=your-stack-name
+
 # you can run the build and deploy tasks in one step using:
 make deploy stack=your-stack-name
 ```
@@ -95,7 +96,7 @@ make bucket action=delete bucket=your-stack-name-tmp
 
 ### Running Functions
 
-Locally:
+Locally (note running locally is for basic debugging purposes only and may require additional configuration):
 
 ```bash
 cp events/checksum-export-csv-report/event.json event.json
@@ -110,6 +111,7 @@ Remotely:
 ```bash
 make invoke-remove func=ChecksumExportCSVReportFunction event=events/checksum-export-csv-report/event.json stack=your-stack-name
 make invoke-remote func=ChecksumExporterFunction event=events/checksum-exporter/event.json stack=your-stack-name
+make invoke-remote func=ReportGeneratorFunction event=events/no-event/event.json stack=your-stack-name
 ```
 
 ### Running Tests
