@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"duracloud/internal/reports"
+	"duracloud/internal/templates"
+	_ "embed"
 	"fmt"
+	"html/template"
 	"log"
 	"os"
 	"time"
@@ -17,10 +20,14 @@ import (
 )
 
 var (
-	managedBucketName string
+	//go:embed templates/storage-report.html
+	storageReportTemplate string
+
 	cloudWatchClient  *cloudwatch.Client
+	managedBucketName string
 	s3Client          *s3.Client
 	stackName         string
+	storageReportTmpl *template.Template
 )
 
 func init() {
@@ -31,6 +38,13 @@ func init() {
 	)
 	if err != nil {
 		panic(fmt.Sprintf("Unable to load AWS config: %v", err))
+	}
+
+	storageReportTmpl, err = template.New("storage-report").
+		Funcs(templates.GetReportGeneratorFuncMap()).
+		Parse(storageReportTemplate)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to parse storage report template: %v", err))
 	}
 
 	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
@@ -44,7 +58,7 @@ func handler(ctx context.Context) error {
 
 	generator := reports.NewStorageReportGenerator(s3Client, cloudWatchClient, stackName)
 
-	reportHTML, err := generator.GenerateReport(ctx)
+	reportHTML, err := generator.GenerateReport(ctx, storageReportTmpl)
 	if err != nil {
 		return fmt.Errorf("failed to generate report: %w", err)
 	}
@@ -54,7 +68,7 @@ func handler(ctx context.Context) error {
 		return nil
 	}
 
-	// Upload report to managed bucket
+	// Upload report to the managed bucket
 	reportKey := fmt.Sprintf("reports/%s-storage-report.html",
 		time.Now().Format("2006-01-02T15-04-05"))
 

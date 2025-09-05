@@ -5,11 +5,11 @@ import (
 	"context"
 	"duracloud/internal/buckets"
 	"fmt"
+	"html/template"
 	"log"
 	"sort"
 	"strings"
 	"sync"
-	"text/template"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -55,7 +55,7 @@ func NewStorageReportGenerator(s3Client *s3.Client, cwClient *cloudwatch.Client,
 	}
 }
 
-func (g *StorageReportGenerator) GenerateReport(ctx context.Context) (string, error) {
+func (g *StorageReportGenerator) GenerateReport(ctx context.Context, tmpl *template.Template) (string, error) {
 	log.Println("Getting eligible buckets")
 	reportBuckets, err := g.getEligibleBuckets(ctx)
 	if err != nil {
@@ -79,7 +79,7 @@ func (g *StorageReportGenerator) GenerateReport(ctx context.Context) (string, er
 	log.Printf("Report data: %+v\n", reportData)
 
 	log.Println("Generating HTML report")
-	htmlReport, err := g.generateHTML(reportData)
+	htmlReport, err := g.generateHTML(reportData, tmpl)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate HTML: %w", err)
 	}
@@ -386,15 +386,7 @@ func (g *StorageReportGenerator) calculateAggregates(bucketStats []BucketStats) 
 	return report
 }
 
-func (g *StorageReportGenerator) generateHTML(data ReportData) (string, error) {
-	tmpl, err := template.New("report").Funcs(template.FuncMap{
-		"formatBytes":  formatBytes,
-		"formatNumber": formatNumber,
-	}).Parse(htmlTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
-
+func (g *StorageReportGenerator) generateHTML(data ReportData, tmpl *template.Template) (string, error) {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
@@ -415,102 +407,3 @@ func (g *StorageReportGenerator) UploadReport(ctx context.Context, bucketName, k
 
 	return err
 }
-
-// Helper functions
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
-}
-
-func formatNumber(n int64) string {
-	str := fmt.Sprintf("%d", n)
-	if len(str) <= 3 {
-		return str
-	}
-
-	var result []string
-	for i := len(str); i > 0; i -= 3 {
-		start := i - 3
-		if start < 0 {
-			start = 0
-		}
-		result = append([]string{str[start:i]}, result...)
-	}
-	return strings.Join(result, ",")
-}
-
-const htmlTemplate = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>DuraCloud Storage Report - {{.StackName}}</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .summary { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .bucket { margin-bottom: 30px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
-        .bucket h3 { margin-top: 0; color: #333; }
-        .prefix-stats { margin-left: 20px; }
-        .prefix-item { margin-bottom: 5px; padding: 5px; background: #f9f9f9; border-radius: 3px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f5f5f5; }
-        .metric { font-weight: bold; color: #2c5282; }
-    </style>
-</head>
-<body>
-    <h1>DuraCloud Storage Report</h1>
-    <p><strong>Stack:</strong> {{.StackName}}</p>
-    <p><strong>Generated:</strong> {{.GeneratedAt.Format "2006-01-02 15:04:05 UTC"}}</p>
-
-    <div class="summary">
-        <h2>Summary</h2>
-        <p><span class="metric">Total Buckets:</span> {{formatNumber .TotalBuckets}}</p>
-        <p><span class="metric">Total Storage:</span> {{formatBytes .TotalSize}}</p>
-        <p><span class="metric">Total Files:</span> {{formatNumber .TotalObjects}}</p>
-    </div>
-
-    <h2>Bucket Details</h2>
-
-    <div class="summary">
-        <p>Top-Level Prefix data (if any) will be more up to date than the aggregate totals for storage and file counts. This is because the aggregate totals are updated daily, but the prefix data is calculated when the report is generated. <i>Therefore some difference between the respective counts is normal.</i></p>
-    </div>
-
-    {{range .BucketStats}}
-    <div class="bucket">
-        <h3>{{.Name}}</h3>
-        <p><span class="metric">Storage:</span> {{formatBytes .TotalSize}}</p>
-        <p><span class="metric">Files:</span> {{formatNumber .TotalObjects}}</p>
-
-        {{if .PrefixStats}}
-        <h4>Top-Level Prefixes</h4>
-        <div class="prefix-stats">
-            {{range .PrefixStats}}
-            <div class="prefix-item">
-                <strong>{{.Prefix}}</strong> - {{formatBytes .Size}} ({{formatNumber .ObjectCount}} files)
-            </div>
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if .Tags}}
-        <h4>Tags</h4>
-        <table>
-            <tr><th>Key</th><th>Value</th></tr>
-            {{range $key, $value := .Tags}}
-            <tr><td>{{$key}}</td><td>{{$value}}</td></tr>
-            {{end}}
-        </table>
-        {{end}}
-    </div>
-    {{end}}
-</body>
-</html>
-`

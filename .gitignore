@@ -6,6 +6,7 @@
 .sam-translate/
 .vscode/settings.json
 *.html
+!cmd/report-generator/templates/storage-report.html
 buckets.txt
 CLAUDE.md
 event.json
