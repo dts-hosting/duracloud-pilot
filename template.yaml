@@ -751,7 +751,10 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "Trigger monthly DynamoDB checksum table exports"
-      ScheduleExpression: "cron(0 6 1 * ? *)" # 1st day of month at 6 AM UTC
+      # TODO: make configurable so dev can have daily schedule
+      # ScheduleExpression: "cron(0 6 1 * ? *)" # 1st day of month at 6 AM UTC
+      ScheduleExpression: "cron(0 6 * * ? *)" # Daily at 6 AM UTC
+
       State: ENABLED
       Targets:
         - Arn: !GetAtt ChecksumExporterFunction.Arn
@@ -761,7 +764,9 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "Trigger weekly stats report generation"
-      ScheduleExpression: "cron(0 8 ? * SUN *)" # Every Sunday at 8 AM UTC
+      # TODO: make configurable so dev can have daily schedule
+      # ScheduleExpression: "cron(0 8 ? * SUN *)" # Every Sunday at 8 AM UTC
+      ScheduleExpression: "cron(0 8 * * ? *)" # Daily at 8 AM UTC
       State: ENABLED
       Targets:
         - Arn: !GetAtt ReportGeneratorFunction.Arn
