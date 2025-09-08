@@ -6,6 +6,18 @@ resource "aws_s3_bucket" "managed_bucket" {
   }
 }
 
+resource "aws_s3_bucket_notification" "managed_bucket_notification" {
+  bucket     = aws_s3_bucket.managed_bucket.id
+  depends_on = [aws_lambda_permission.s3_managed_bucket_invoke_permission]
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.checksum_export_csv_report_function.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "exports/checksum-table/"
+    filter_suffix       = ".json.gz"
+  }
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "managed_bucket_lifecycle" {
   bucket = aws_s3_bucket.managed_bucket.id
 
@@ -161,8 +173,7 @@ resource "aws_sqs_queue" "object_deleted" {
 
 # SNS Topic for email alerts
 resource "aws_sns_topic" "email_alert_topic" {
-  count = local.enable_email_alerts ? 1 : 0
-  name  = "${local.stack_name}-email-alert-notifications"
+  name = "${local.stack_name}-email-alert-notifications"
 
   tags = {
     Name = "${local.stack_name}-email-alert-notifications"
@@ -171,7 +182,7 @@ resource "aws_sns_topic" "email_alert_topic" {
 
 resource "aws_sns_topic_subscription" "email_alert_subscription" {
   count     = local.enable_email_alerts ? 1 : 0
-  topic_arn = aws_sns_topic.email_alert_topic[0].arn
+  topic_arn = aws_sns_topic.email_alert_topic.arn
   protocol  = "email"
   endpoint  = var.alert_email_address
 }

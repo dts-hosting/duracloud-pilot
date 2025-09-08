@@ -156,12 +156,6 @@ resource "aws_lambda_function" "checksum_export_csv_report_function" {
     log_group  = aws_cloudwatch_log_group.checksum_export_csv_report_function.name
   }
 
-  environment {
-    variables = {
-      S3_MANAGED_BUCKET = aws_s3_bucket.managed_bucket.bucket
-    }
-  }
-
   depends_on = [
     aws_iam_role_policy_attachment.checksum_export_csv_report_function_basic,
     aws_iam_role_policy.checksum_export_csv_report_function_policy,
@@ -191,7 +185,7 @@ resource "aws_lambda_function" "checksum_failure_function" {
   environment {
     variables = {
       S3_MANAGED_BUCKET = aws_s3_bucket.managed_bucket.bucket
-      SNS_TOPIC_ARN     = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : ""
+      SNS_TOPIC_ARN     = aws_sns_topic.email_alert_topic.arn
       STACK_NAME        = local.stack_name
     }
   }
@@ -226,7 +220,7 @@ resource "aws_lambda_function" "checksum_verification_function" {
     variables = {
       DYNAMODB_CHECKSUM_TABLE  = aws_dynamodb_table.checksum_table.name
       DYNAMODB_SCHEDULER_TABLE = aws_dynamodb_table.checksum_scheduler_table.name
-      SNS_TOPIC_ARN            = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : ""
+      SNS_TOPIC_ARN            = aws_sns_topic.email_alert_topic.arn
       STACK_NAME               = local.stack_name
     }
   }
@@ -327,10 +321,8 @@ resource "aws_lambda_function" "report_generator_function" {
 
   environment {
     variables = {
-      DYNAMODB_CHECKSUM_TABLE = aws_dynamodb_table.checksum_table.name
-      S3_MANAGED_BUCKET       = aws_s3_bucket.managed_bucket.bucket
-      SNS_TOPIC_ARN           = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : ""
-      STACK_NAME              = local.stack_name
+      S3_MANAGED_BUCKET = aws_s3_bucket.managed_bucket.bucket
+      STACK_NAME        = local.stack_name
     }
   }
 
@@ -442,15 +434,17 @@ resource "aws_lambda_permission" "checksum_exporter_invoke_permission" {
   depends_on = [aws_lambda_function.checksum_exporter_function]
 }
 
-resource "aws_lambda_permission" "checksum_export_csv_report_invoke_permission" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.checksum_export_csv_report_function.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.checksum_export_csv_report_schedule.arn
+resource "aws_lambda_permission" "s3_managed_bucket_invoke_permission" {
+  statement_id   = "AllowExecutionFromS3Bucket"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.checksum_export_csv_report_function.function_name
+  principal      = "s3.amazonaws.com"
+  source_account = data.aws_caller_identity.current.account_id
+  source_arn     = aws_s3_bucket.managed_bucket.arn
 
   depends_on = [aws_lambda_function.checksum_export_csv_report_function]
 }
+
 
 resource "aws_lambda_permission" "report_generator_invoke_permission" {
   statement_id  = "AllowExecutionFromEventBridge"

@@ -2,7 +2,7 @@
 resource "aws_cloudwatch_event_rule" "checksum_exporter_schedule" {
   name                = "${local.stack_name}-checksum-exporter-schedule"
   description         = "Trigger monthly DynamoDB checksum table exports"
-  schedule_expression = "cron(0 6 1 * ? *)"
+  schedule_expression = "cron(0 6 * * ? *)"
   state               = "ENABLED"
 
   tags = {
@@ -16,27 +16,10 @@ resource "aws_cloudwatch_event_target" "checksum_exporter_target" {
   arn       = aws_lambda_function.checksum_exporter_function.arn
 }
 
-resource "aws_cloudwatch_event_rule" "checksum_export_csv_report_schedule" {
-  name                = "${local.stack_name}-checksum-export-csv-report-schedule"
-  description         = "Trigger monthly DynamoDB checksum table CSV reports"
-  schedule_expression = "cron(0 6 2 * ? *)"
-  state               = "ENABLED"
-
-  tags = {
-    Name = "${local.stack_name}-checksum-export-csv-report-schedule"
-  }
-}
-
-resource "aws_cloudwatch_event_target" "checksum_export_csv_report_target" {
-  rule      = aws_cloudwatch_event_rule.checksum_export_csv_report_schedule.name
-  target_id = "ChecksumExportCSVReportTarget"
-  arn       = aws_lambda_function.checksum_export_csv_report_function.arn
-}
-
 resource "aws_cloudwatch_event_rule" "report_generator_schedule" {
   name                = "${local.stack_name}-report-generator-schedule"
   description         = "Trigger weekly stats report generation"
-  schedule_expression = "cron(0 8 ? * SUN *)"
+  schedule_expression = "cron(0 8 * * ? *)"
   state               = "ENABLED"
 
   tags = {

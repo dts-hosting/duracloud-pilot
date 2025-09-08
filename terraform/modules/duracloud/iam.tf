@@ -58,6 +58,44 @@ resource "aws_iam_role_policy" "s3_replication_policy" {
   })
 }
 
+# EventBridge Lambda Role
+resource "aws_iam_role" "events_invoke_lambda_role" {
+  name = "${local.stack_name}-events-invoke-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${local.stack_name}-events-invoke-lambda-role"
+  }
+}
+
+resource "aws_iam_role_policy" "events_invoke_lambda_policy" {
+  name = "${local.stack_name}-invoke-lambda-policy"
+  role = aws_iam_role.events_invoke_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "lambda:InvokeFunction"
+        Resource = aws_lambda_function.bucket_requested_function.arn
+      }
+    ]
+  })
+}
+
 # EventBridge SQS Role
 resource "aws_iam_role" "events_invoke_sqs_role" {
   name = "${local.stack_name}-invoke-sqs-role"
@@ -655,6 +693,39 @@ resource "aws_iam_policy" "s3_power_users_policy" {
           "arn:aws:s3:::${local.stack_name}*",
           "arn:aws:s3:::${local.stack_name}*/*"
         ]
+      },
+      {
+        Effect = "Deny"
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-managed",
+          "arn:aws:s3:::${local.stack_name}*-managed/*"
+        ]
+      },
+      {
+        Effect = "Deny"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-repl",
+          "arn:aws:s3:::${local.stack_name}*-repl/*"
+        ]
+      },
+      {
+        Effect = "Deny"
+        Action = [
+          "s3:*"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-logs",
+          "arn:aws:s3:::${local.stack_name}*-logs/*"
+        ]
       }
     ]
   })
@@ -688,12 +759,57 @@ resource "aws_iam_policy" "s3_users_policy" {
         Effect = "Allow"
         Action = [
           "s3:ListBucket",
-          "s3:GetObject",
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:AbortMultipartUpload",
+          "s3:ListMultipartUploadParts",
+          "s3:ListBucketMultipartUploads"
         ]
         Resource = [
           "arn:aws:s3:::${local.stack_name}*",
           "arn:aws:s3:::${local.stack_name}*/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-managed",
+          "arn:aws:s3:::${local.stack_name}*-managed/*"
+        ]
+      },
+      {
+        Effect = "Deny"
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-managed",
+          "arn:aws:s3:::${local.stack_name}*-managed/*"
+        ]
+      },
+      {
+        Effect = "Deny"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-repl",
+          "arn:aws:s3:::${local.stack_name}*-repl/*"
+        ]
+      },
+      {
+        Effect = "Deny"
+        Action = [
+          "s3:*"
+        ]
+        Resource = [
+          "arn:aws:s3:::${local.stack_name}*-logs",
+          "arn:aws:s3:::${local.stack_name}*-logs/*"
         ]
       }
     ]
@@ -707,12 +823,19 @@ resource "aws_iam_group_policy_attachment" "s3_users_policy_attachment" {
 
 # Test User
 resource "aws_iam_user" "test_user" {
-  name = "${local.stack_name}-test-user"
+  name = "${local.stack_name}-TestUser"
   path = "/"
 
   tags = {
-    Name = "${local.stack_name}-test-user"
+    Name = "${local.stack_name}-TestUser"
   }
+}
+
+resource "aws_iam_user_group_membership" "test_user_membership" {
+  user = aws_iam_user.test_user.name
+  groups = [
+    aws_iam_group.s3_power_users_group.name
+  ]
 }
 
 resource "aws_iam_access_key" "test_user_access_key" {
@@ -721,9 +844,11 @@ resource "aws_iam_access_key" "test_user_access_key" {
 
 # SSM Parameters for test user access keys
 resource "aws_ssm_parameter" "test_user_access_key_parameter" {
-  name  = "/${local.stack_name}/test-user/access-key-id"
-  type  = "String"
-  value = aws_iam_access_key.test_user_access_key.id
+  name        = "/${local.stack_name}/iam/test/access-key-id"
+  description = "Access Key ID for the S3 test user"
+  type        = "String"
+  value       = aws_iam_access_key.test_user_access_key.id
+  tier        = "Standard"
 
   tags = {
     Name = "${local.stack_name}-test-user-access-key-id"
@@ -731,9 +856,11 @@ resource "aws_ssm_parameter" "test_user_access_key_parameter" {
 }
 
 resource "aws_ssm_parameter" "test_user_secret_access_key_parameter" {
-  name  = "/${local.stack_name}/test-user/secret-access-key"
-  type  = "SecureString"
-  value = aws_iam_access_key.test_user_access_key.secret
+  name        = "/${local.stack_name}/iam/test/secret-access-key"
+  description = "Secret Access Key for the S3 test user"
+  type        = "String"
+  value       = aws_iam_access_key.test_user_access_key.secret
+  tier        = "Standard"
 
   tags = {
     Name = "${local.stack_name}-test-user-secret-access-key"
