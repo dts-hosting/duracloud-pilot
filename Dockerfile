@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/golang:1.24 AS build-image
+FROM public.ecr.aws/docker/library/golang:1.25 AS build-image
 ARG FUNCTION_NAME
 WORKDIR /src
 COPY . .
