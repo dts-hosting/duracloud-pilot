@@ -13,6 +13,10 @@ else
     $(error Unsupported architecture $(ARCH))
 endif
 
+.PHONY: bootstrap
+bootstrap: ## Create project s3 bucket and ecr repository resources
+	@./scripts/bootstrap.sh $(project)
+
 .PHONY: bucket
 bucket: ## Run a bucket manager script command
 	@./scripts/bucket-manager.sh $(action) $(bucket)
@@ -107,6 +111,10 @@ test: ## Run all tests and cleanup resources
 	@STACK_NAME=$(stack) go test -count 1 -v ./...
 	@echo -e "\n\n\nTests ran successfully cleaning up ...\n\n\n"
 	$(MAKE) cleanup stack=$(stack)
+
+.PHONY: tf-init
+tf-init: ## Run Terraform init
+	@terraform init -backend-config="duracloud.tfbackend" -reconfigure -upgrade
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

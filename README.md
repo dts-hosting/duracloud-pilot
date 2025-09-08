@@ -14,6 +14,7 @@ DuraCloud is a serverless application built using AWS SAM that provides robust f
 - [Docker](https://docs.docker.com/engine/install/)
 - [Go](https://go.dev/doc/install)
 - [Node.js](https://nodejs.org/en) (for documentation site)
+- [Terraform](#)
 
 ## Quick Start
 
@@ -22,10 +23,38 @@ DuraCloud is a serverless application built using AWS SAM that provides robust f
 2. Create a `.env` file with your AWS profile:
 
 ```
-STACK_NAME=your-profile-name
+AWS_PROFILE=your-profile-name
+STACK_NAME=your-stack-name
 ```
 
-3. Build and deploy:
+- `AWS_PROFILE` should match a profile name from your aws config
+- `STACK_NAME` is a prefix that will be applied to aws resources created by Terraform
+
+3. Bootstrap a project (one time only, skip if done and resources already exist):
+
+```bash
+make bootstrap project=your-project-name
+```
+
+This creates an s3 bucket and ecr repository:
+
+- http://your-project-name.s3.amazonaws.com
+- ${ACCOUNT_ID}$.dkr.ecr.${REGION}$.amazonaws.com/your-project-name
+
+4. Create Terraform backend config:
+
+```bash
+cp duracloud.tfbackend.EXAMPLE duracloud.tfbackend
+```
+
+Update the `duracloud.tfbackend` config to reference the project bucket
+(bucket) and stack name (key).
+
+```bash
+make tf-init
+```
+
+5. Build and deploy:
 
 ```bash
 make pull
@@ -36,13 +65,13 @@ make deploy-only stack=your-stack-name
 make deploy stack=your-stack-name
 ```
 
-4. Get test user credentials:
+6. Get test user credentials:
 
 ```bash
 make creds stack=your-stack-name
 ```
 
-5. To clean up:
+7. To clean up:
 
 ```bash
 make cleanup stack=your-stack-name

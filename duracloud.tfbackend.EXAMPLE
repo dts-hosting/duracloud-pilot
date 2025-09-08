@@ -4,9 +4,8 @@
 # terraform plan
 # terraform apply -auto-approve
 # https://developer.hashicorp.com/terraform/language/backend/s3#permissions-required
-bucket       = duracloud-pilot-terraform-state
-key          = duracloud-lyrasis.tfstate
+bucket       = "duracloud-pilot"
+key          = "duracloud-lyrasis.tfstate"
 use_lockfile = true
-region       = us-west-2
+region       = "us-west-2"
 encrypt      = true
-profile      = duracloudexp
