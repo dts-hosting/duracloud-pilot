@@ -62,5 +62,4 @@ func SendNotification(ctx context.Context, client *sns.Client, notification SNSN
 
 	log.Printf("Notification sent successfully: %s", *result.MessageId)
 	return nil
-
 }

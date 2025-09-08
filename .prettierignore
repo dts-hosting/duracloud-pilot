@@ -1,4 +1,5 @@
 package-lock.json
 build/
+cmd/
 docs/
 node_modules/

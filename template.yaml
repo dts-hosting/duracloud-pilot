@@ -14,6 +14,14 @@ Parameters:
     Type: String
     Default: ""
     Description: "Email address for alarm notifications (leave empty to disable email alerts)"
+  LambdaArchitecture:
+    Type: String
+    AllowedValues:
+      - arm64
+      - x86_64
+    Default: x86_64
+    Description: Architecture for Lambda functions
+  # Docker image uri cfg
   BucketRequestedImageUri:
     Type: String
     Default: ""
@@ -46,13 +54,6 @@ Parameters:
     Type: String
     Default: ""
     Description: "Docker image for Report Generator function (leave empty for local build)"
-  LambdaArchitecture:
-    Type: String
-    AllowedValues:
-      - arm64
-      - x86_64
-    Default: x86_64
-    Description: Architecture for Lambda functions
 
 Conditions:
   BucketRequestedUseExternalImage:
@@ -462,6 +463,7 @@ Resources:
       Environment:
         Variables:
           S3_MANAGED_BUCKET: !Ref S3ManagedBucket
+          STACK_NAME: !Ref AWS::StackName
       ImageUri:
         !If [
           ReportGeneratorUseExternalImage,
@@ -475,12 +477,16 @@ Resources:
       Policies:
         - AWSLambdaBasicExecutionRole
         - Statement:
-            # CloudWatch permissions for S3 Storage Lens metrics
+            # Permissions for S3 buckets access and metrics
             - Effect: Allow
               Action:
                 - cloudwatch:GetMetricStatistics
                 - cloudwatch:GetMetricData
                 - cloudwatch:ListMetrics
+                - s3:GetBucketTagging
+                - s3:GetObject
+                - s3:ListAllMyBuckets
+                - s3:ListBucket
               Resource: "*"
             # S3 permissions for upload destination
             - Effect: Allow
@@ -745,7 +751,10 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "Trigger monthly DynamoDB checksum table exports"
-      ScheduleExpression: "cron(0 6 1 * ? *)" # 1st day of month at 6 AM UTC
+      # TODO: make configurable so dev can have daily schedule
+      # ScheduleExpression: "cron(0 6 1 * ? *)" # 1st day of month at 6 AM UTC
+      ScheduleExpression: "cron(0 6 * * ? *)" # Daily at 6 AM UTC
+
       State: ENABLED
       Targets:
         - Arn: !GetAtt ChecksumExporterFunction.Arn
@@ -755,7 +764,9 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: "Trigger weekly stats report generation"
-      ScheduleExpression: "cron(0 8 ? * SUN *)" # Every Sunday at 8 AM UTC
+      # TODO: make configurable so dev can have daily schedule
+      # ScheduleExpression: "cron(0 8 ? * SUN *)" # Every Sunday at 8 AM UTC
+      ScheduleExpression: "cron(0 8 * * ? *)" # Daily at 8 AM UTC
       State: ENABLED
       Targets:
         - Arn: !GetAtt ReportGeneratorFunction.Arn

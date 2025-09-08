@@ -43,7 +43,7 @@ deploy: build ## Deploy stack to AWS
 	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: deploy-only
-deploy-only: ## Deploy stack to AWS w/o running build first
+deploy-only: ## Deploy stack to AWS w/o running a build first
 	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: docs-build

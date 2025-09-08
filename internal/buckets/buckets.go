@@ -28,12 +28,18 @@ const (
 	PublicSuffix          = "-public"
 	ReplicationSuffix     = "-repl"
 
+	ApplicationTagKey                = "Application"
 	ApplicationTagValue              = "DuraCloud"
 	BucketNameMaxChars               = 63
 	BucketRequestedFileErrorKey      = "error-processing-bucket-requested-file"
+	BucketTypeTagKey                 = "BucketType"
 	InventoryConfigId                = "inventory"
 	LifeCycleTransitionToGlacierDays = 7
 	NonCurrentVersionExpirationDays  = 2
+	PublicTagValue                   = "Public"
+	ReplicationTagValue              = "Replication"
+	StackNameTagKey                  = "StackName"
+	StandardTagValue                 = "Standard"
 )
 
 var (
@@ -73,9 +79,9 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 		Bucket: aws.String(bucketName),
 		Tagging: &types.Tagging{
 			TagSet: []types.Tag{
-				{Key: aws.String("Application"), Value: aws.String(ApplicationTagValue)},
-				{Key: aws.String("StackName"), Value: aws.String(stackName)},
-				{Key: aws.String("BucketType"), Value: aws.String(bucketType)},
+				{Key: aws.String(ApplicationTagKey), Value: aws.String(ApplicationTagValue)},
+				{Key: aws.String(StackNameTagKey), Value: aws.String(stackName)},
+				{Key: aws.String(BucketTypeTagKey), Value: aws.String(bucketType)},
 			},
 		},
 	})
