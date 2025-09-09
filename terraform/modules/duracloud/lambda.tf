@@ -73,7 +73,7 @@ resource "aws_cloudwatch_log_group" "report_generator_function" {
 
 # Lambda Functions
 resource "aws_lambda_function" "bucket_requested_function" {
-  function_name = "${local.stack_name}-BucketRequestedFunction"
+  function_name = "${local.stack_name}-bucket-requested"
   role          = aws_iam_role.bucket_requested_function_role.arn
   image_uri     = local.bucket_requested_image_uri
   package_type  = "Image"
@@ -104,12 +104,12 @@ resource "aws_lambda_function" "bucket_requested_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-BucketRequestedFunction"
+    Name = "${local.stack_name}-bucket-requested-function"
   }
 }
 
 resource "aws_lambda_function" "checksum_exporter_function" {
-  function_name = "${local.stack_name}-ChecksumExporterFunction"
+  function_name = "${local.stack_name}-checksum-exporter"
   role          = aws_iam_role.checksum_exporter_function_role.arn
   image_uri     = local.checksum_exporter_image_uri
   package_type  = "Image"
@@ -137,12 +137,12 @@ resource "aws_lambda_function" "checksum_exporter_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-ChecksumExporterFunction"
+    Name = "${local.stack_name}-checksum-exporter-function"
   }
 }
 
 resource "aws_lambda_function" "checksum_export_csv_report_function" {
-  function_name = "${local.stack_name}-ChecksumExportCSVReportFunction"
+  function_name = "${local.stack_name}-checksum-export-csv-report"
   role          = aws_iam_role.checksum_export_csv_report_function_role.arn
   image_uri     = local.checksum_export_csv_report_image_uri
   package_type  = "Image"
@@ -163,12 +163,12 @@ resource "aws_lambda_function" "checksum_export_csv_report_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-ChecksumExportCSVReportFunction"
+    Name = "${local.stack_name}-checksum-export-csv-report-function"
   }
 }
 
 resource "aws_lambda_function" "checksum_failure_function" {
-  function_name = "${local.stack_name}-ChecksumFailureFunction"
+  function_name = "${local.stack_name}-checksum-failure"
   role          = aws_iam_role.checksum_failure_function_role.arn
   image_uri     = local.checksum_failure_image_uri
   package_type  = "Image"
@@ -197,12 +197,12 @@ resource "aws_lambda_function" "checksum_failure_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-ChecksumFailureFunction"
+    Name = "${local.stack_name}-checksum-failure-function"
   }
 }
 
 resource "aws_lambda_function" "checksum_verification_function" {
-  function_name = "${local.stack_name}-ChecksumVerificationFunction"
+  function_name = "${local.stack_name}-checksum-verification"
   role          = aws_iam_role.checksum_verification_function_role.arn
   image_uri     = local.checksum_verification_image_uri
   package_type  = "Image"
@@ -232,12 +232,12 @@ resource "aws_lambda_function" "checksum_verification_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-ChecksumVerificationFunction"
+    Name = "${local.stack_name}-checksum-verification-function"
   }
 }
 
 resource "aws_lambda_function" "file_deleted_function" {
-  function_name = "${local.stack_name}-FileDeletedFunction"
+  function_name = "${local.stack_name}-file-deleted"
   role          = aws_iam_role.file_deleted_function_role.arn
   image_uri     = local.file_deleted_image_uri
   package_type  = "Image"
@@ -266,12 +266,12 @@ resource "aws_lambda_function" "file_deleted_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-FileDeletedFunction"
+    Name = "${local.stack_name}-file-deleted-function"
   }
 }
 
 resource "aws_lambda_function" "file_uploaded_function" {
-  function_name = "${local.stack_name}-FileUploadedFunction"
+  function_name = "${local.stack_name}-file-uploaded"
   role          = aws_iam_role.file_uploaded_function_role.arn
   image_uri     = local.file_uploaded_image_uri
   package_type  = "Image"
@@ -300,12 +300,12 @@ resource "aws_lambda_function" "file_uploaded_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-FileUploadedFunction"
+    Name = "${local.stack_name}-file-uploaded-function"
   }
 }
 
 resource "aws_lambda_function" "report_generator_function" {
-  function_name = "${local.stack_name}-ReportGeneratorFunction"
+  function_name = "${local.stack_name}-report-generator"
   role          = aws_iam_role.report_generator_function_role.arn
   image_uri     = local.report_generator_image_uri
   package_type  = "Image"
@@ -333,7 +333,7 @@ resource "aws_lambda_function" "report_generator_function" {
   ]
 
   tags = {
-    Name = "${local.stack_name}-ReportGeneratorFunction"
+    Name = "${local.stack_name}-report-generator-function"
   }
 }
 

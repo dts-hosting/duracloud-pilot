@@ -1,4 +1,26 @@
 # CloudWatch Alarms
+resource "aws_cloudwatch_metric_alarm" "checksum_export_csv_report_function_error_alarm" {
+  alarm_name          = "${local.stack_name}-checksum-export-csv-report-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "0"
+  alarm_description   = "Error generating CSV report from checksum table export"
+
+  dimensions = {
+    FunctionName = aws_lambda_function.checksum_export_csv_report_function.function_name
+  }
+
+  alarm_actions = local.enable_email_alerts ? [aws_sns_topic.email_alert_topic.arn] : []
+
+  tags = {
+    Name = "${local.stack_name}-checksum-export-csv-report-errors"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "checksum_exporter_function_error_alarm" {
   alarm_name          = "${local.stack_name}-checksum-exporter-errors"
   comparison_operator = "GreaterThanThreshold"

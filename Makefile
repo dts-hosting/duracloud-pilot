@@ -13,38 +13,30 @@ else
     $(error Unsupported architecture $(ARCH))
 endif
 
+TF_VARS := TF_VAR_arch=$(LAMBDA_ARCH) \
+	TF_VAR_repo=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME) \
+	TF_VAR_stack=$(STACK_NAME)
+
+.PHONY: backend-config
+backend-config: ## Generate duracloud.tfbackend from template
+	@cp duracloud.tfbackend.EXAMPLE duracloud.tfbackend
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		sed -i '' 's/your-project-name/$(PROJECT_NAME)/g' duracloud.tfbackend; \
+		sed -i '' 's/your-stack-name.tfstate/$(STACK_NAME).tfstate/g' duracloud.tfbackend; \
+		sed -i '' 's/us-west-2/$(AWS_REGION)/g' duracloud.tfbackend; \
+	else \
+		sed -i 's/your-project-name/$(PROJECT_NAME)/g' duracloud.tfbackend; \
+		sed -i 's/your-stack-name.tfstate/$(STACK_NAME).tfstate/g' duracloud.tfbackend; \
+		sed -i 's/us-west-2/$(AWS_REGION)/g' duracloud.tfbackend; \
+	fi
+
 .PHONY: bootstrap
 bootstrap: ## Create project S3 bucket and ECR repository resources
 	@./scripts/bootstrap.sh $(PROJECT_NAME)
 
-.PHONY: bucket
-bucket: ## Run a bucket manager script command
+.PHONY: bucket-manager
+bucket-manager: ## Run a bucket manager script command
 	@./scripts/bucket-manager.sh $(action) $(bucket)
-
-.PHONY: checksum-fail
-checksum-fail: ## Force a checksum failure (stack=name bucket=name file=key)
-	@./scripts/checksum-fail.sh $(stack) $(bucket) $(file)
-
-.PHONY: cleanup
-cleanup: ## Cleanup remote bucket and table resources for a stack
-	@./scripts/cleanup-stack.sh $(stack)
-
-.PHONY: creds
-creds: ## Output the test user access key and secret
-	@aws ssm get-parameter --name "/$(stack)/iam/test/access-key-id"
-	@aws ssm get-parameter --name "/$(stack)/iam/test/secret-access-key"
-
-.PHONY: delete
-delete: ## Delete a deployed stack
-	@sam delete --stack-name $(stack) --no-prompts
-
-.PHONY: deploy
-deploy: build ## Deploy stack to AWS
-	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
-
-.PHONY: deploy-only
-deploy-only: ## Deploy stack to AWS w/o running a build first
-	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
 .PHONY: docker-build
 docker-build: ## Build the docker images for all functions
@@ -102,26 +94,6 @@ docs-dev: ## Start the docs dev server
 docs-install: ## Install docs dependencies
 	@npm install && cd docs-src && npm install
 
-.PHONY: expire-ttl
-expire-ttl: ## Expire TTL for checksum verification (bucket=name file=key)
-	@./scripts/expire-ttl.sh $(stack) $(bucket) $(file)
-
-.PHONY: file-copy
-file-copy: ## Copy a file to a bucket (without prefixes)
-	@aws s3 cp $(file) s3://$(bucket)/
-
-.PHONY: file-delete
-file-delete: ## Delete a file from a bucket (without prefixes)
-	@aws s3 rm s3://$(bucket)/$(file)
-
-.PHONY: invoke
-invoke: ## Invoke a function using SAM CLI locally
-	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
-
-.PHONY: invoke-remote
-invoke-remote: ## Invoke a deployed function remotely
-	@sam remote invoke $(func) --event-file $(event) --stack-name $(stack)
-
 .PHONY: lint
 lint: ## Run linters
 	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
@@ -129,23 +101,78 @@ lint: ## Run linters
 	@terraform fmt .
 	@npm run format
 
-.PHONY: logs
-logs: ## Output logs to console
-	@./scripts/output-logs.sh $(func) $(stack) $(interval)
+.PHONY: output-logs
+output-logs: ## Output logs to console
+	@./scripts/output-logs.sh $(func) $(STACK_NAME) $(interval)
 
-.PHONY: report-csv
-report-csv: ## Generate a checksum csv report
-	@aws s3 cp $(file) s3://$(stack)-managed/exports/checksum-table/2025-08-25/AWSDynamoDB/01234567890123456789/data/abcdef123456.json.gz
+.PHONY: run-function
+run-function: ## Invoke a deployed function
+	@aws lambda invoke \
+		--function-name $(STACK_NAME)-$(function) \
+		--payload file://$(event) \
+		--cli-binary-format raw-in-base64-out \
+		--output text \
+		/dev/stdout
+
+.PHONY: terraform-apply
+terraform-apply: backend-config ## Run Terraform apply
+	@$(TF_VARS) terraform apply -auto-approve
+
+.PHONY: terraform-destroy
+terraform-destroy: backend-config ## Run Terraform destroy
+	@$(TF_VARS) terraform destroy
 
 .PHONY: terraform-init
-terraform-init: ## Run Terraform init
+terraform-init: backend-config ## Run Terraform init
 	@terraform init -backend-config="duracloud.tfbackend" -reconfigure -upgrade
+
+.PHONY: terraform-plan
+terraform-plan: backend-config ## Run Terraform plan
+	@$(TF_VARS) terraform plan
 
 .PHONY: test
 test: ## Run all tests and cleanup resources
-	@STACK_NAME=$(stack) go test -count 1 -v ./...
-	@echo -e "\n\n\nTests ran successfully cleaning up ...\n\n\n"
-	$(MAKE) cleanup stack=$(stack)
+	@go test -count 1 -v ./...
+	@printf "\n\n\nTests ran successfully cleaning up ...\n\n\n"
+	@$(MAKE) workflow-cleanup
+
+.PHONY: test-user-credentials
+test-user-credentials: ## Output the test user access key and secret
+	@aws ssm get-parameter --name "/$(STACK_NAME)/iam/test/access-key-id"
+	@aws ssm get-parameter --name "/$(STACK_NAME)/iam/test/secret-access-key"
+
+.PHONY: workflow-checksum-fail
+workflow-checksum-fail: ## Force a checksum failure (bucket=name file=key)
+	@./scripts/checksum-fail.sh $(STACK_NAME) $(bucket) $(file)
+
+.PHONY: workflow-checksum-report
+workflow-checksum-report: ## Generate a checksum csv report
+	@aws s3 cp files/abcdef123456.json.gz \
+		s3://$(STACK_NAME)-managed/exports/checksum-table/2025-08-25/AWSDynamoDB/01234567890123456789/data/abcdef123456.json.gz
+
+.PHONY: workflow-cleanup
+workflow-cleanup: ## Cleanup (clear out) deployed bucket and table resources
+	@./scripts/cleanup-stack.sh $(STACK_NAME)
+
+.PHONY: workflow-delete
+workflow-delete: ## Delete a file from a bucket (root level only)
+	@aws s3 rm s3://$(bucket)/$(file)
+
+.PHONY: workflow-expire-ttl
+workflow-expire-ttl: ## Expire TTL for checksum verification (bucket=name file=key)
+	@./scripts/expire-ttl.sh $(STACK_NAME) $(bucket) $(file)
+
+.PHONY: workflow-storage-report
+workflow-storage-report: ## Generate a storage html report
+	@aws s3 cp ./files/upload-me.txt s3://$(bucket)/files/file1.txt
+	@aws s3 cp ./files/upload-me.txt s3://$(bucket)/files/file2.txt
+	@aws s3 cp ./files/upload-me.txt s3://$(bucket)/files/file3.txt
+	@$(MAKE) run-function \
+		function=report-generator event=events/no-event/event.json
+
+.PHONY: workflow-upload
+workflow-upload: ## Copy a file to a bucket (root level only)
+	@aws s3 cp $(file) s3://$(bucket)/
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-45s\033[0m %s\n", $$1, $$2}'

@@ -88,8 +88,8 @@ resource "aws_iam_role_policy" "events_invoke_lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = "lambda:InvokeFunction"
+        Effect   = "Allow"
+        Action   = "lambda:InvokeFunction"
         Resource = aws_lambda_function.bucket_requested_function.arn
       }
     ]
@@ -318,6 +318,10 @@ resource "aws_iam_role_policy" "checksum_export_csv_report_function_policy" {
       {
         Effect = "Allow"
         Action = [
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts",
+          "s3:AbortMultipartUpload",
           "s3:GetObject",
           "s3:PutObject",
           "s3:PutObjectAcl"
@@ -395,7 +399,7 @@ resource "aws_iam_role_policy" "checksum_failure_function_policy" {
         Action = [
           "sns:Publish"
         ]
-        Resource = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : "*"
+        Resource = local.enable_email_alerts ? aws_sns_topic.email_alert_topic.arn : "*"
       }
     ]
   })
@@ -473,7 +477,7 @@ resource "aws_iam_role_policy" "checksum_verification_function_policy" {
         Action = [
           "sns:Publish"
         ]
-        Resource = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : "*"
+        Resource = local.enable_email_alerts ? aws_sns_topic.email_alert_topic.arn : "*"
       }
     ]
   })
@@ -521,10 +525,7 @@ resource "aws_iam_role_policy" "file_deleted_function_policy" {
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:DeleteItem",
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem"
+          "dynamodb:DeleteItem"
         ]
         Resource = [
           aws_dynamodb_table.checksum_table.arn,
@@ -577,10 +578,7 @@ resource "aws_iam_role_policy" "file_uploaded_function_policy" {
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:DeleteItem",
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem"
+          "dynamodb:PutItem"
         ]
         Resource = [
           aws_dynamodb_table.checksum_table.arn,
@@ -636,23 +634,33 @@ resource "aws_iam_role_policy" "report_generator_function_policy" {
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:Scan"
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:ListMetrics",
+          "s3:GetBucketTagging",
+          "s3:GetObject",
+          "s3:ListAllMyBuckets",
+          "s3:ListBucket"
         ]
-        Resource = aws_dynamodb_table.checksum_table.arn
+        Resource = "*"
       },
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:PutObjectAcl",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts"
         ]
-        Resource = "${aws_s3_bucket.managed_bucket.arn}/*"
+        Resource = "${aws_s3_bucket.managed_bucket.arn}/reports/*"
       },
       {
         Effect = "Allow"
         Action = [
           "sns:Publish"
         ]
-        Resource = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : "*"
+        Resource = local.enable_email_alerts ? aws_sns_topic.email_alert_topic.arn : "*"
       }
     ]
   })

@@ -25,7 +25,7 @@ output "checksum_scheduler_table_name" {
 
 output "sns_topic_arn" {
   description = "ARN of the SNS email alert topic"
-  value       = local.enable_email_alerts ? aws_sns_topic.email_alert_topic[0].arn : null
+  value       = local.enable_email_alerts ? aws_sns_topic.email_alert_topic.arn : null
 }
 
 output "lambda_functions" {

@@ -1,3 +1,4 @@
+# Pre-created S3 resources for reports and user create bucket requests
 resource "aws_s3_bucket" "managed_bucket" {
   bucket = "${local.stack_name}-managed"
 
@@ -48,14 +49,6 @@ resource "aws_s3_bucket" "bucket_requested" {
 
   tags = {
     Name = "${local.stack_name}-bucket-requested"
-  }
-}
-
-resource "aws_s3_bucket" "logs_bucket" {
-  bucket = "${local.stack_name}-logs"
-
-  tags = {
-    Name = "${local.stack_name}-logs"
   }
 }
 
@@ -120,69 +113,4 @@ resource "aws_s3_bucket_policy" "managed_bucket_policy" {
   })
 
   depends_on = [aws_s3_bucket.managed_bucket]
-}
-
-# SQS Queues for S3 event processing
-resource "aws_sqs_queue" "object_created_dlq" {
-  name                      = "${local.stack_name}-object-created-dlq"
-  message_retention_seconds = 1209600 # 14 days
-
-  tags = {
-    Name = "${local.stack_name}-object-created-dlq"
-  }
-}
-
-resource "aws_sqs_queue" "object_created" {
-  name                       = "${local.stack_name}-object-created"
-  visibility_timeout_seconds = 960 # 16 minutes (Lambda timeout + buffer)
-  receive_wait_time_seconds  = 20
-
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.object_created_dlq.arn
-    maxReceiveCount     = 3
-  })
-
-  tags = {
-    Name = "${local.stack_name}-object-created"
-  }
-}
-
-resource "aws_sqs_queue" "object_deleted_dlq" {
-  name                      = "${local.stack_name}-object-deleted-dlq"
-  message_retention_seconds = 1209600 # 14 days
-
-  tags = {
-    Name = "${local.stack_name}-object-deleted-dlq"
-  }
-}
-
-resource "aws_sqs_queue" "object_deleted" {
-  name                       = "${local.stack_name}-object-deleted"
-  visibility_timeout_seconds = 300 # Lambda timeout + buffer
-  receive_wait_time_seconds  = 20
-
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.object_deleted_dlq.arn
-    maxReceiveCount     = 3
-  })
-
-  tags = {
-    Name = "${local.stack_name}-object-deleted"
-  }
-}
-
-# SNS Topic for email alerts
-resource "aws_sns_topic" "email_alert_topic" {
-  name = "${local.stack_name}-email-alert-notifications"
-
-  tags = {
-    Name = "${local.stack_name}-email-alert-notifications"
-  }
-}
-
-resource "aws_sns_topic_subscription" "email_alert_subscription" {
-  count     = local.enable_email_alerts ? 1 : 0
-  topic_arn = aws_sns_topic.email_alert_topic.arn
-  protocol  = "email"
-  endpoint  = var.alert_email_address
 }
