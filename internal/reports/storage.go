@@ -231,7 +231,7 @@ func (g *StorageReportGenerator) getBucketStatistics(ctx context.Context, bucket
 
 func (g *StorageReportGenerator) getStorageMetrics(ctx context.Context, bucketName string) (int64, int64, error) {
 	endTime := time.Now()
-	startTime := endTime.Add(-24 * time.Hour)
+	startTime := endTime.Add(-48 * time.Hour)
 
 	storageTypes := []string{
 		"StandardStorage",

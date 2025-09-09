@@ -75,9 +75,8 @@
 <h2>Bucket Details</h2>
 
 <div class="summary">
-  <p>Top-Level Prefix data (if any) will be more up to date than the aggregate totals for storage and file counts. This
-    is because the aggregate totals are updated daily, but the prefix data is calculated when the report is generated.
-    <i>Therefore, some difference between the respective counts is normal.</i></p>
+  <p>Details begin with a summary of total storage and number of files per bucket. This data is refreshed every 24 hours so the numbers may not be real-time accurate to when the report was generated.</p>
+  <p>Top-Level Prefix data treats each root level "folder" (prefix), if any, as a container for calculating file and storage totals exclusively within that prefix.</p>
 </div>
 
 {{range .BucketStats}}
