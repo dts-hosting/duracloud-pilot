@@ -54,7 +54,7 @@ func TestFileDeletedWorkflow(t *testing.T) {
 	assert.NoError(t, err, "Scheduler record should exist before deletion")
 
 	// Simulate file deletion by invoking the file-deleted lambda
-	functionName := fmt.Sprintf("%s-FileDeletedFunction", stackName)
+	functionName := fmt.Sprintf("%s-file-deleted", stackName)
 
 	// Use the actual event structure from the file-deleted event template (re: event.json)
 	eventPayload := fmt.Sprintf(`{

@@ -122,7 +122,7 @@ func (h *FixityTestHelper) InvokeVerificationFunction(t *testing.T, record db.Ch
 	require.NoError(t, err, "Should marshal event payload")
 
 	// Invoke the Lambda function directly
-	functionName := fmt.Sprintf("%s-ChecksumVerificationFunction", h.StackName)
+	functionName := fmt.Sprintf("%s-checksum-verification", h.StackName)
 	result, err := lambdaFunctionInvoke(h.Context, h.Clients.Lambda, functionName, payload)
 	require.NoError(t, err, "Should invoke checksum verification function")
 

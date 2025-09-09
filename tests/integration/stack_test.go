@@ -16,7 +16,7 @@ func TestStackDeployment(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("VerifyLambdaFunction", func(t *testing.T) {
-		functionName := fmt.Sprintf("%s-BucketRequestedFunction", stackName)
+		functionName := fmt.Sprintf("%s-bucket-requested", stackName)
 		exists := lambdaFunctionExists(ctx, clients.Lambda, functionName)
 		assert.True(t, exists, "Lambda function %s should exist", functionName)
 	})
