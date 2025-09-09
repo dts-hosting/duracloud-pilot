@@ -22,7 +22,7 @@ module "duracloud" {
   stack_name          = "duracloud-dev"
   alert_email_address = "admin@example.com"
   lambda_architecture = "x86_64"
-  
+
   # Optional: Specify Docker image URIs (leave empty for local builds)
   bucket_requested_image_uri           = ""
   checksum_exporter_image_uri          = ""
@@ -37,48 +37,49 @@ module "duracloud" {
 
 ## Requirements
 
-| Name | Version |
-|------|---------|
-| terraform | >= 1.0 |
-| aws | ~> 5.0 |
+| Name      | Version |
+| --------- | ------- |
+| terraform | >= 1.0  |
+| aws       | ~> 5.0  |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| aws | ~> 5.0 |
+| ---- | ------- |
+| aws  | ~> 5.0  |
 
 ## Inputs
 
-| Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| stack_name | Stack name prefix for resources | `string` | n/a | yes |
-| alert_email_address | Email address for alarm notifications (leave empty to disable email alerts) | `string` | `""` | no |
-| bucket_requested_image_uri | Docker image for Bucket Requested function (leave empty for local build) | `string` | `""` | no |
-| checksum_exporter_image_uri | Docker image for Checksum Exporter function (leave empty for local build) | `string` | `""` | no |
-| checksum_export_csv_report_image_uri | Docker image for Checksum Export CSV report function (leave empty for local build) | `string` | `""` | no |
-| checksum_failure_image_uri | Docker image for Checksum Failure function (leave empty for local build) | `string` | `""` | no |
-| checksum_verification_image_uri | Docker image for Checksum Verification function (leave empty for local build) | `string` | `""` | no |
-| file_deleted_image_uri | Docker image for File Deleted function (leave empty for local build) | `string` | `""` | no |
-| file_uploaded_image_uri | Docker image for File Uploaded function (leave empty for local build) | `string` | `""` | no |
-| report_generator_image_uri | Docker image for Report Generator function (leave empty for local build) | `string` | `""` | no |
-| lambda_architecture | Architecture for Lambda functions | `string` | `"x86_64"` | no |
+| Name                                 | Description                                                                        | Type     | Default    | Required |
+| ------------------------------------ | ---------------------------------------------------------------------------------- | -------- | ---------- | :------: |
+| stack_name                           | Stack name prefix for resources                                                    | `string` | n/a        |   yes    |
+| alert_email_address                  | Email address for alarm notifications (leave empty to disable email alerts)        | `string` | `""`       |    no    |
+| bucket_requested_image_uri           | Docker image for Bucket Requested function (leave empty for local build)           | `string` | `""`       |    no    |
+| checksum_exporter_image_uri          | Docker image for Checksum Exporter function (leave empty for local build)          | `string` | `""`       |    no    |
+| checksum_export_csv_report_image_uri | Docker image for Checksum Export CSV report function (leave empty for local build) | `string` | `""`       |    no    |
+| checksum_failure_image_uri           | Docker image for Checksum Failure function (leave empty for local build)           | `string` | `""`       |    no    |
+| checksum_verification_image_uri      | Docker image for Checksum Verification function (leave empty for local build)      | `string` | `""`       |    no    |
+| file_deleted_image_uri               | Docker image for File Deleted function (leave empty for local build)               | `string` | `""`       |    no    |
+| file_uploaded_image_uri              | Docker image for File Uploaded function (leave empty for local build)              | `string` | `""`       |    no    |
+| report_generator_image_uri           | Docker image for Report Generator function (leave empty for local build)           | `string` | `""`       |    no    |
+| lambda_architecture                  | Architecture for Lambda functions                                                  | `string` | `"x86_64"` |    no    |
 
 ## Outputs
 
-| Name | Description |
-|------|-------------|
-| stack_name | The stack name used for resource naming |
-| managed_bucket_name | Name of the managed S3 bucket |
-| bucket_requested_name | Name of the bucket requested S3 bucket |
-| checksum_table_name | Name of the DynamoDB checksum table |
+| Name                          | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| stack_name                    | The stack name used for resource naming       |
+| managed_bucket_name           | Name of the managed S3 bucket                 |
+| bucket_requested_name         | Name of the bucket requested S3 bucket        |
+| checksum_table_name           | Name of the DynamoDB checksum table           |
 | checksum_scheduler_table_name | Name of the DynamoDB checksum scheduler table |
-| sns_topic_arn | ARN of the SNS email alert topic |
-| lambda_functions | Map of Lambda function names and ARNs |
+| sns_topic_arn                 | ARN of the SNS email alert topic              |
+| lambda_functions              | Map of Lambda function names and ARNs         |
 
 ## Resources Created
 
 ### Lambda Functions
+
 - **Bucket Requested Function**: Processes bucket requested events
 - **Checksum Exporter Function**: Exports DynamoDB checksum table
 - **Checksum Export CSV Report Function**: Writes CSV reports of DynamoDB table exports
@@ -89,25 +90,30 @@ module "duracloud" {
 - **Report Generator Function**: Generates storage stats reports
 
 ### DynamoDB Tables
+
 - **Checksum Table**: Stores file checksums with streams enabled
 - **Checksum Scheduler Table**: Manages checksum verification scheduling with TTL
 
 ### S3 Buckets
+
 - **Managed Bucket**: Primary storage bucket for DuraCloud
 - **Bucket Requested Bucket**: Handles bucket creation requests
 
 ### SQS Queues
+
 - **Object Created Queue**: Processes S3 object creation events
 - **Object Deleted Queue**: Processes S3 object deletion events
 - **Dead Letter Queues**: For failed message processing
 
 ### CloudWatch Alarms
+
 - Lambda function error monitoring
 - Lambda concurrency monitoring
 - DynamoDB write capacity monitoring
 - SQS dead letter queue monitoring
 
 ### EventBridge Rules
+
 - Scheduled checksum exports (monthly)
 - Scheduled report generation (weekly)
 - S3 object created/deleted event processing
@@ -124,6 +130,7 @@ All resources are prefixed with the `stack_name` variable to ensure uniqueness a
 ## Email Alerts
 
 Email alerts are optional and controlled by the `alert_email_address` variable:
+
 - If provided, an SNS topic is created and CloudWatch alarms will send notifications
 - If empty, no SNS topic is created and alarms will not send email notifications
 

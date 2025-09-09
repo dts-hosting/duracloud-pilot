@@ -7,6 +7,7 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
 ### Verification Process
 
 1. **Read and Analyze the CloudFormation Template**
+
    - Examine `template.yaml` in the project root
    - Identify ALL resources defined in the `Resources:` section
    - Note all parameters, conditions, and their usage
@@ -14,6 +15,7 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
 
 2. **Inventory CloudFormation Resources**
    Create a comprehensive list of all resources by type:
+
    - AWS::Serverless::Function (Lambda functions)
    - AWS::DynamoDB::Table
    - AWS::S3::Bucket and AWS::S3::BucketPolicy
@@ -28,6 +30,7 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
    - Any other resource types present
 
 3. **Examine the Terraform Module**
+
    - Review all `.tf` files in `terraform/modules/duracloud/`
    - Map each CloudFormation resource to its Terraform equivalent
    - Verify resource configurations match exactly
@@ -35,8 +38,9 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
 4. **Detailed Verification Checklist**
 
    For each CloudFormation resource, verify:
-   
+
    **Lambda Functions:**
+
    - All 8 functions are present with correct names
    - Environment variables match exactly
    - Memory, timeout, and architecture settings are identical
@@ -45,12 +49,14 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
    - Log group associations are correct
 
    **DynamoDB Tables:**
+
    - Table names, billing modes, and key schemas match
    - Stream specifications are identical
    - Point-in-time recovery settings match
    - TTL configurations are preserved
 
    **S3 Buckets:**
+
    - All bucket names and configurations match
    - Lifecycle rules are identical
    - Bucket policies are equivalent
@@ -58,18 +64,21 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
    - Dependencies are preserved
 
    **EventBridge Rules:**
+
    - Schedule expressions are identical
    - Event patterns match exactly
    - Target configurations are equivalent
    - Rule states (enabled/disabled) match
 
    **SQS Queues:**
+
    - Queue names and properties match
    - Dead letter queue configurations are identical
    - Visibility timeouts and retention periods match
    - Redrive policies are equivalent
 
    **IAM Resources:**
+
    - All roles, policies, groups, and users are present
    - Policy documents are functionally equivalent
    - Trust relationships match
@@ -77,27 +86,32 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
    - Access key configurations match
 
    **CloudWatch Alarms:**
+
    - All alarm configurations are identical
    - Metric names, thresholds, and evaluation periods match
    - SNS topic associations are preserved
    - Alarm actions and OK actions match
 
    **Event Source Mappings:**
+
    - DynamoDB stream mappings are identical
    - SQS queue mappings match
    - Batch sizes and filtering criteria are preserved
    - Starting positions match
 
    **Lambda Permissions:**
+
    - All invoke permissions are present
    - Principal and source ARN configurations match
    - Function associations are correct
 
    **SSM Parameters:**
+
    - Parameter names, types, and values match
    - Descriptions are preserved
 
 5. **Configuration Accuracy**
+
    - Verify all resource properties match exactly
    - Check that all references and dependencies are maintained
    - Ensure conditional logic is properly implemented
@@ -106,6 +120,7 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
 
 6. **Missing Resources Report**
    If any CloudFormation resources are missing from the Terraform module:
+
    - List each missing resource with its CloudFormation logical ID
    - Specify the resource type and key properties
    - Indicate which Terraform file should contain the resource
@@ -113,6 +128,7 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
 
 7. **Configuration Discrepancies**
    For resources that exist but have different configurations:
+
    - Identify the specific property differences
    - Show the CloudFormation value vs. Terraform value
    - Explain the impact of the discrepancy
@@ -130,6 +146,7 @@ You are tasked with verifying that the Terraform module located in `terraform/mo
 ### Expected Outcome
 
 The verification should result in a comprehensive report that either:
+
 - Confirms 100% parity between CloudFormation and Terraform implementations
 - Provides a detailed action plan to achieve complete parity
 

@@ -77,7 +77,7 @@ resource "aws_lambda_function" "bucket_requested_function" {
   role          = aws_iam_role.bucket_requested_function_role.arn
   image_uri     = local.bucket_requested_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 60
   memory_size   = 128
   description   = "DuraCloud function that processes bucket requested events"
@@ -113,7 +113,7 @@ resource "aws_lambda_function" "checksum_exporter_function" {
   role          = aws_iam_role.checksum_exporter_function_role.arn
   image_uri     = local.checksum_exporter_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 900
   memory_size   = 256
   description   = "DuraCloud function that exports DynamoDB checksum table"
@@ -146,7 +146,7 @@ resource "aws_lambda_function" "checksum_export_csv_report_function" {
   role          = aws_iam_role.checksum_export_csv_report_function_role.arn
   image_uri     = local.checksum_export_csv_report_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 900
   memory_size   = 256
   description   = "DuraCloud function that writes CSV Reports of DynamoDB table exports"
@@ -172,7 +172,7 @@ resource "aws_lambda_function" "checksum_failure_function" {
   role          = aws_iam_role.checksum_failure_function_role.arn
   image_uri     = local.checksum_failure_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 60
   memory_size   = 128
   description   = "DuraCloud function that processes checksum failure events"
@@ -206,7 +206,7 @@ resource "aws_lambda_function" "checksum_verification_function" {
   role          = aws_iam_role.checksum_verification_function_role.arn
   image_uri     = local.checksum_verification_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 900
   memory_size   = 256
   description   = "DuraCloud function that processes checksum verification via TTL events"
@@ -241,7 +241,7 @@ resource "aws_lambda_function" "file_deleted_function" {
   role          = aws_iam_role.file_deleted_function_role.arn
   image_uri     = local.file_deleted_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 60
   memory_size   = 128
   description   = "DuraCloud function that processes s3 object deleted events"
@@ -275,7 +275,7 @@ resource "aws_lambda_function" "file_uploaded_function" {
   role          = aws_iam_role.file_uploaded_function_role.arn
   image_uri     = local.file_uploaded_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 900
   memory_size   = 256
   description   = "DuraCloud function that processes s3 object uploaded events"
@@ -309,7 +309,7 @@ resource "aws_lambda_function" "report_generator_function" {
   role          = aws_iam_role.report_generator_function_role.arn
   image_uri     = local.report_generator_image_uri
   package_type  = "Image"
-  architectures = [var.lambda_architecture]
+  architectures = [local.lambda_architecture]
   timeout       = 900
   memory_size   = 256
   description   = "DuraCloud function that generates storage stats report"

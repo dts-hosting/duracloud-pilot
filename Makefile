@@ -14,16 +14,12 @@ else
 endif
 
 .PHONY: bootstrap
-bootstrap: ## Create project s3 bucket and ecr repository resources
-	@./scripts/bootstrap.sh $(project)
+bootstrap: ## Create project S3 bucket and ECR repository resources
+	@./scripts/bootstrap.sh $(PROJECT_NAME)
 
 .PHONY: bucket
 bucket: ## Run a bucket manager script command
 	@./scripts/bucket-manager.sh $(action) $(bucket)
-
-.PHONY: build
-build: ## Build the project (images, artifacts, etc.)
-	@sam build --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH) && sam validate
 
 .PHONY: checksum-fail
 checksum-fail: ## Force a checksum failure (stack=name bucket=name file=key)
@@ -50,6 +46,50 @@ deploy: build ## Deploy stack to AWS
 deploy-only: ## Deploy stack to AWS w/o running a build first
 	@sam deploy --stack-name $(stack) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
 
+.PHONY: docker-build
+docker-build: ## Build the docker images for all functions
+docker-build:
+	@$(MAKE) docker-build-function function=bucket-requested
+	@$(MAKE) docker-build-function function=checksum-export-csv-report
+	@$(MAKE) docker-build-function function=checksum-exporter
+	@$(MAKE) docker-build-function function=checksum-failure
+	@$(MAKE) docker-build-function function=checksum-verification
+	@$(MAKE) docker-build-function function=file-deleted
+	@$(MAKE) docker-build-function function=file-uploaded
+	@$(MAKE) docker-build-function function=report-generator
+
+.PHONY: docker-build-function
+docker-build-function: ## Build a specific function
+	@docker build . --build-arg FUNCTION_NAME=$(function) \
+		-t $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
+
+.PHONY: docker-deploy
+docker-deploy: ## Build and push a specific function
+	@$(MAKE) docker-build-function function=$(function)
+	@$(MAKE) docker-push-function function=$(function)
+
+.PHONY: docker-pull
+docker-pull: ## Pull required docker images
+	@docker pull public.ecr.aws/docker/library/golang:1.24
+	@docker pull public.ecr.aws/lambda/provided:al2023
+
+.PHONY: docker-push
+docker-push: ## Push the docker images for all functions
+docker-push:
+	@$(MAKE) docker-push-function function=bucket-requested
+	@$(MAKE) docker-push-function function=checksum-export-csv-report
+	@$(MAKE) docker-push-function function=checksum-exporter
+	@$(MAKE) docker-push-function function=checksum-failure
+	@$(MAKE) docker-push-function function=checksum-verification
+	@$(MAKE) docker-push-function function=file-deleted
+	@$(MAKE) docker-push-function function=file-uploaded
+	@$(MAKE) docker-push-function function=report-generator
+
+.PHONY: docker-push-function
+docker-push-function: ## Push a specific function
+	@docker push \
+		$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
+
 .PHONY: docs-build
 docs-build: ## Build the docs site
 	@cd docs-src && npm run build
@@ -74,11 +114,6 @@ file-copy: ## Copy a file to a bucket (without prefixes)
 file-delete: ## Delete a file from a bucket (without prefixes)
 	@aws s3 rm s3://$(bucket)/$(file)
 
-.PHONY: guidelines
-guidelines: ## Copy the guidelines into LLM favored locations
-	@mkdir -p .junie
-	@cp guidelines.md CLAUDE.md && cp guidelines.md .junie/
-
 .PHONY: invoke
 invoke: ## Invoke a function using SAM CLI locally
 	@sam local invoke $(func) --event $(event) --parameter-overrides LambdaArchitecture=$(LAMBDA_ARCH)
@@ -91,20 +126,20 @@ invoke-remote: ## Invoke a deployed function remotely
 lint: ## Run linters
 	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
 	@gofmt -w .
+	@terraform fmt .
 	@npm run format
 
 .PHONY: logs
 logs: ## Output logs to console
 	@./scripts/output-logs.sh $(func) $(stack) $(interval)
 
-.PHONY: pull
-pull: ## Pull required docker images
-	@docker pull public.ecr.aws/docker/library/golang:1.24
-	@docker pull public.ecr.aws/lambda/provided:al2023
-
 .PHONY: report-csv
 report-csv: ## Generate a checksum csv report
 	@aws s3 cp $(file) s3://$(stack)-managed/exports/checksum-table/2025-08-25/AWSDynamoDB/01234567890123456789/data/abcdef123456.json.gz
+
+.PHONY: terraform-init
+terraform-init: ## Run Terraform init
+	@terraform init -backend-config="duracloud.tfbackend" -reconfigure -upgrade
 
 .PHONY: test
 test: ## Run all tests and cleanup resources
@@ -112,11 +147,7 @@ test: ## Run all tests and cleanup resources
 	@echo -e "\n\n\nTests ran successfully cleaning up ...\n\n\n"
 	$(MAKE) cleanup stack=$(stack)
 
-.PHONY: tf-init
-tf-init: ## Run Terraform init
-	@terraform init -backend-config="duracloud.tfbackend" -reconfigure -upgrade
-
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-45s\033[0m %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help

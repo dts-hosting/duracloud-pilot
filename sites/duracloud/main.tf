@@ -11,7 +11,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -65,9 +65,11 @@ module "duracloud" {
 
   for_each = var.stacks
 
-  stack_name          = each.key
-  alert_email_address = each.value.alert_email_address
-  lambda_architecture = each.value.lambda_architecture
+  stack_name                 = each.key
+  alert_email_address        = each.value.alert_email_address
+  checksum_exporter_schedule = coalesce(each.key.checksum_exporter_schedule, null)
+  lambda_architecture        = each.value.lambda_architecture
+  report_generator_schedule  = coalesce(each.key.report_generator_schedule, null)
 
   bucket_requested_image_uri           = "duracloud/bucket-requested:latest"
   checksum_exporter_image_uri          = "duracloud/checksum-exporter:latest"

@@ -1,11 +1,5 @@
-# cp duracloud.tfbackend.EXAMPLE duracloud.tfbackend
-# -- update the config as necessary
-# terraform init -backend-config="duracloud.tfbackend" -reconfigure -upgrade
-# terraform plan
-# terraform apply -auto-approve
-# https://developer.hashicorp.com/terraform/language/backend/s3#permissions-required
-bucket       = "duracloud-pilot"
-key          = "duracloud-lyrasis.tfstate"
+bucket       = "your-project-name"
+key          = "your-stack-name.tfstate"
 use_lockfile = true
 region       = "us-west-2"
 encrypt      = true

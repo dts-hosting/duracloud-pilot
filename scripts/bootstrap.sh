@@ -18,9 +18,25 @@ aws s3api put-public-access-block \
   --bucket "${NAME}" \
   --public-access-block-configuration BlockPublicAcls=True,IgnorePublicAcls=True,BlockPublicPolicy=True,RestrictPublicBuckets=True
 
-aws ecr create-repository \
-  --repository-name "${NAME}"
+# Create ECR repositories for each function
+FUNCTIONS=(
+  "bucket-requested"
+  "checksum-export-csv-report"
+  "checksum-exporter"
+  "checksum-failure"
+  "checksum-verification"
+  "file-deleted"
+  "file-uploaded"
+  "report-generator"
+)
 
-aws ecr put-lifecycle-policy \
-  --repository-name "${NAME}" \
-  --lifecycle-policy-text file://files/ecr-lifecycle-policy.json
+for function in "${FUNCTIONS[@]}"; do
+  echo "Creating ECR repository for ${NAME}/${function}..."
+  aws ecr create-repository \
+    --repository-name "${NAME}/${function}" || true
+
+  echo "Setting lifecycle policy for ${NAME}/${function}..."
+  aws ecr put-lifecycle-policy \
+    --repository-name "${NAME}/${function}" \
+    --lifecycle-policy-text file://files/ecr-lifecycle-policy.json || true
+done

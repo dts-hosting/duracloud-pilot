@@ -1,45 +1,53 @@
 # DuraCloud (pilot)
 
-DuraCloud is a serverless application built using AWS SAM that provides robust file storage management with built-in data integrity verification through checksums.
+DuraCloud is a serverless application built using AWS services that provides file storage management with built-in data integrity verification through checksums.
 
 ## Documentation
 
+- [User Documentation](#)
 - [Technical Documentation](technical-documentation.md) - Comprehensive overview of the system architecture, components, workflows, and security model
-- [Developer Guidelines](guidelines.md) - Detailed information for developers working on the project
 
 ## Prerequisites
 
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-- [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
 - [Docker](https://docs.docker.com/engine/install/)
 - [Go](https://go.dev/doc/install)
-- [Node.js](https://nodejs.org/en) (for documentation site)
-- [Terraform](#)
+- [Terraform](https://developer.hashicorp.com/terraform)
 
-## Quick Start
+## Quick Start (development only)
 
-1. Configure AWS credentials (via profile or environment variables)
+1. Configure AWS credentials (via profile or environment variables).
 
-2. Create a `.env` file with your AWS profile:
+2. Create a `.env` file with:
 
 ```
+AWS_ACCOUNT_ID=your-account-id
 AWS_PROFILE=your-profile-name
+AWS_REGION=your-region
+PROJECT_NAME=your-project-name
 STACK_NAME=your-stack-name
 ```
 
+- `AWS_ACCOUNT_ID` is the aws account id for a profile in your aws config
 - `AWS_PROFILE` should match a profile name from your aws config
-- `STACK_NAME` is a prefix that will be applied to aws resources created by Terraform
+- `AWS_REGION` is the region you want to use with your aws profile
+- `PROJECT_NAME` is used to create resources needed by Terraform and build tasks
+- `STACK_NAME` choose a unique prefix to apply to AWS resources created by Terraform
 
-3. Bootstrap a project (one time only, skip if done and resources already exist):
+_Note: for Lyrasis testing use `duracloud-pilot` as the project name._
+
+3. Bootstrap a project _(one time only, skip this if resources already exist):_
 
 ```bash
-make bootstrap project=your-project-name
+make bootstrap
 ```
 
-This creates an s3 bucket and ecr repository:
+This creates an S3 bucket and an ECR repository per function
 
-- http://your-project-name.s3.amazonaws.com
-- ${ACCOUNT_ID}$.dkr.ecr.${REGION}$.amazonaws.com/your-project-name
+- `https://your-project-name.s3.amazonaws.com`
+- `${ACCOUNT_ID}$.dkr.ecr.${REGION}$.amazonaws.com/your-project-name/${function}`
+
+_Note: skip this step for Lyrasis testing as the resources already exist._
 
 4. Create Terraform backend config:
 
@@ -47,36 +55,68 @@ This creates an s3 bucket and ecr repository:
 cp duracloud.tfbackend.EXAMPLE duracloud.tfbackend
 ```
 
-Update the `duracloud.tfbackend` config to reference the project bucket
-(bucket) and stack name (key).
+Update the `duracloud.tfbackend` config to reference your actual project
+and stack name.
+
+_Note: we cannot use environment variables in `tfbackend` so need to re-specify
+the project and stack name here._
+
+_Take care to not reference another users stack name for your `key`!_
+
+Then:
 
 ```bash
-make tf-init
+make terraform-init
 ```
+
+If everything is prepared correctly the Terraform command should succeed. Resolve
+any issues before proceeding.
 
 5. Build and deploy:
 
 ```bash
-make pull
-make build
-make deploy-only stack=your-stack-name
-
-# you can run the build and deploy tasks in one step using:
-make deploy stack=your-stack-name
+# build
+make docker-pull # pulls required Docker base images
+make docker-build # builds all DuraCloud function Docker images
+make docker-push # pushes all DuraCloud function Docker images to ECR
 ```
+
+The first build and push may take a few minutes to complete.
+
+```bash
+# deploy
+make terraform-plan # review output before deployment
+make terraform-apply # deploy the Terraform plan
+```
+
+After initial deployment if you only want to build and push a single
+function (i.e. a typical development workflow) then you can:
+
+```bash
+make docker-deploy function=${function}
+```
+
+This updates the image in ECR so subsequent invocations of the function
+will use the new image, and it should be a quick process.
 
 6. Get test user credentials:
 
 ```bash
-make creds stack=your-stack-name
+make test-user-credentials
+# make creds stack=your-stack-name
 ```
 
 7. To clean up:
 
 ```bash
-make cleanup stack=your-stack-name
-make delete stack=your-stack-name
+make workflow-cleanup
+# make cleanup stack=your-stack-name
+
+make terraform-destroy
+# make delete stack=your-stack-name
 ```
+
+## Summary
 
 > **Note**: Setting `stack` uniquely allows for multiple deployments to the same account. Created resources are prefixed with the `stack` name.
 

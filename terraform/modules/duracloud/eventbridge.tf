@@ -2,7 +2,7 @@
 resource "aws_cloudwatch_event_rule" "checksum_exporter_schedule" {
   name                = "${local.stack_name}-checksum-exporter-schedule"
   description         = "Trigger monthly DynamoDB checksum table exports"
-  schedule_expression = "cron(0 6 * * ? *)"
+  schedule_expression = local.checksum_exporter_schedule
   state               = "ENABLED"
 
   tags = {
@@ -19,7 +19,7 @@ resource "aws_cloudwatch_event_target" "checksum_exporter_target" {
 resource "aws_cloudwatch_event_rule" "report_generator_schedule" {
   name                = "${local.stack_name}-report-generator-schedule"
   description         = "Trigger weekly stats report generation"
-  schedule_expression = "cron(0 8 * * ? *)"
+  schedule_expression = local.report_generator_schedule
   state               = "ENABLED"
 
   tags = {
