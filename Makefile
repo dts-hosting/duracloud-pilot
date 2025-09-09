@@ -23,11 +23,11 @@ backend-config: ## Generate duracloud.tfbackend from template
 	@if [ "$$(uname)" = "Darwin" ]; then \
 		sed -i '' 's/your-project-name/$(PROJECT_NAME)/g' duracloud.tfbackend; \
 		sed -i '' 's/your-stack-name.tfstate/$(STACK_NAME).tfstate/g' duracloud.tfbackend; \
-		sed -i '' 's/us-west-2/$(AWS_REGION)/g' duracloud.tfbackend; \
+		sed -i '' 's/your-region/$(AWS_REGION)/g' duracloud.tfbackend; \
 	else \
 		sed -i 's/your-project-name/$(PROJECT_NAME)/g' duracloud.tfbackend; \
 		sed -i 's/your-stack-name.tfstate/$(STACK_NAME).tfstate/g' duracloud.tfbackend; \
-		sed -i 's/us-west-2/$(AWS_REGION)/g' duracloud.tfbackend; \
+		sed -i 's/your-region/$(AWS_REGION)/g' duracloud.tfbackend; \
 	fi
 
 .PHONY: bootstrap
