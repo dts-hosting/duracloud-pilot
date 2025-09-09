@@ -337,7 +337,7 @@ Important diagram guidelines:
   d) Failure notification workflow
 - Keep each diagram focused on a specific aspect to improve readability
 
-Base your analysis on the terraform module and the Lambda function code in the cmd directory.
+Base your analysis on the terraform module and the Lambda function code in the cmd directory and update for any additional functions that may have been added.
 ```
 
 ## Conclusion

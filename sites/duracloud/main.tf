@@ -29,8 +29,10 @@ variable "service" {}
 variable "stacks" {
   description = "Configuration for DuraCloud stacks"
   type = map(object({
-    alert_email_address = string
-    lambda_architecture = string
+    alert_email_address        = string
+    checksum_exporter_schedule = string
+    lambda_architecture        = string
+    report_generator_schedule  = string
   }))
   validation {
     condition = alltrue([
