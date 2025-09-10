@@ -82,24 +82,11 @@ docker-push-function: ## Push a specific function
 	@docker push \
 		$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
 
-.PHONY: docs-build
-docs-build: ## Build the docs site
-	@cd docs-src && npm run build
-
-.PHONY: docs-dev
-docs-dev: ## Start the docs dev server
-	@cd docs-src && npm run dev
-
-.PHONY: docs-install
-docs-install: ## Install docs dependencies
-	@npm install && cd docs-src && npm install
-
 .PHONY: lint
 lint: ## Run linters
 	@docker run -t --rm -v .:/app -w /app golangci/golangci-lint:latest golangci-lint run || true
 	@gofmt -w .
 	@terraform fmt .
-	@npm run format
 
 .PHONY: output-logs
 output-logs: ## Output logs to console
