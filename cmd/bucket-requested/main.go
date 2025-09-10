@@ -94,6 +94,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	for i := 0; i < len(requestedBuckets); i++ {
 		results := <-resultChan
 		for bucket, status := range results {
+			log.Printf("Bucket status: %s %s\n", bucket, status)
 			bucketsStatus[bucket] = status
 		}
 	}

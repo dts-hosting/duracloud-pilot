@@ -59,6 +59,9 @@ docker-build-function: ## Build a specific function
 docker-deploy: ## Build and push a specific function
 	@$(MAKE) docker-build-function function=$(function)
 	@$(MAKE) docker-push-function function=$(function)
+	@aws lambda update-function-code \
+		--function-name $(STACK_NAME)-$(function) \
+		--image-uri $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
 
 .PHONY: docker-pull
 docker-pull: ## Pull required docker images
