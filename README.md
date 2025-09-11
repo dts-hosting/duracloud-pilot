@@ -14,6 +14,7 @@ on top of AWS S3 to support long term access to and preservation of files.
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 - [Docker](https://docs.docker.com/engine/install/)
 - [Go](https://go.dev/doc/install)
+- [Saw](https://github.com/TylerBrock/saw) (for viewing logs)
 - [Terraform](https://developer.hashicorp.com/terraform)
 
 ## Quick Start (development only)
