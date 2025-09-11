@@ -63,11 +63,6 @@ docker-deploy: ## Build and push a specific function
 		--function-name $(STACK_NAME)-$(function) \
 		--image-uri $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
 
-.PHONY: docker-tag-function
-docker-tag-function: ## Tag a stack image for public ECR publishing
-	@docker tag $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME) \
-		public.ecr.aws/d8h1c9w2/duracloud/$(function):latest
-
 .PHONY: docker-pull
 docker-pull: ## Pull required docker images
 	@docker pull public.ecr.aws/docker/library/golang:1.24
