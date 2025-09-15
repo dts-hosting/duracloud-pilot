@@ -1,27 +1,28 @@
-name: Build and Push Docker Images
-
-concurrency:
-  group: docker-build-${{ github.ref }}
-  cancel-in-progress: true
+name: Build and push DuraCloud function images
 
 on:
   push:
     branches:
-      - main
-    tags:
-      - "v*"
+      - "main"
     paths:
+      - ".github/workflows/docker-build-push.yml"
+      - "cmd/**"
       - "Dockerfile"
       - "go.mod"
       - "go.sum"
-      - ".github/workflows/docker-build-push.yml"
-      - "cmd/**"
       - "internal/**"
+      - "Makefile"
       - "test/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 env:
-  DOCKER_REGISTRY: docker.io
-  DOCKER_NAMESPACE: duracloud
+  AWS_ACCOUNT_ID: 005622933699 # central account for DuraCloud images
+  PROJECT_NAME: duracloud
+  STACK_NAME: latest # image tag: using "STACK_NAME" here to re-use the make tasks
 
 jobs:
   build-and-push:
@@ -31,15 +32,17 @@ jobs:
       fail-fast: false
       matrix:
         function:
-          - bucket-requested
-          - checksum-export-csv-report
-          - checksum-exporter
-          - checksum-failure
-          - checksum-verification
-          - file-deleted
-          - file-uploaded
-          - report-generator
-
+          [
+            bucket-requested,
+            checksum-export-csv-report,
+            checksum-exporter,
+            checksum-failure,
+            checksum-verification,
+            file-deleted,
+            file-uploaded,
+            report-generator,
+          ]
+        region: [us-west-2, us-east-2]
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -47,38 +50,42 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          aws-region: ${{ matrix.region }}
+          role-to-assume: arn:aws:iam::388502511949:role/github_actions
+          role-session-name: oidc
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Switch role to ECR build account
+        uses: aws-actions/configure-aws-credentials@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_NAMESPACE }}/${{ matrix.function }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+          aws-region: ${{ matrix.region }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/DevOpsRole
+          role-session-name: duracloud
+          role-chaining: true
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        timeout-minutes: 30
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Build docker image
+        uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
-          build-args: |
-            FUNCTION_NAME=${{ matrix.function }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          build-args: FUNCTION_NAME=${{ matrix.function }}
+          tags: ${{ env.PROJECT_NAME }}/${{ matrix.function }}:${{ env.STACK_NAME }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          load: true
 
-      - name: Image digest
-        run: echo ${{ steps.build-push.outputs.digest }}
+      - name: Tag image for target region
+        run: |
+          docker tag \
+            $PROJECT_NAME/${{ matrix.function }}:$STACK_NAME \
+            $AWS_ACCOUNT_ID.dkr.ecr.${{ matrix.region }}.amazonaws.com/$PROJECT_NAME/${{ matrix.function }}:$STACK_NAME
+
+      - name: Push docker image
+        env:
+          AWS_REGION: ${{ matrix.region }}
+        run: make docker-push-function function=${{ matrix.function }}
