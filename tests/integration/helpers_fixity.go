@@ -9,6 +9,7 @@ import (
 	"duracloud/internal/files"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,19 +313,21 @@ func GenerateTestContent(size int, prefix string) string {
 		return ""
 	}
 
-	content := ""
 	baseContent := fmt.Sprintf("%s test data. ", prefix)
+	var builder strings.Builder
+	builder.Grow(size)
 
-	for len(content) < size {
-		content += baseContent
+	for builder.Len() < size {
+		builder.WriteString(baseContent)
 	}
 
+	result := builder.String()
 	// Trim to exact size if needed
-	if len(content) > size {
-		content = content[:size]
+	if len(result) > size {
+		return result[:size]
 	}
 
-	return content
+	return result
 }
 
 // ValidateChecksumRecord validates all fields of a checksum record
