@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -97,7 +96,6 @@ func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, 
 		return err
 	}
 
-	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil
 }
 
