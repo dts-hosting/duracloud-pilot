@@ -18,6 +18,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+const (
+	MaxConcurrentWorkers      = 10               // Concurrent bucket workers
+	BucketWorkerTimeout       = 10 * time.Minute // Per-bucket timeout
+	PrefixWorkerPoolSize      = 5                // Concurrent prefix processors per bucket
+	PrefixCollectionTimeout   = 5 * time.Minute  // Total timeout for all prefix stats
+	PrefixProgressLogInterval = 10               // Log every N pages (10 pages = 10k objects)
+)
+
 type StorageReportGenerator struct {
 	s3Client  *s3.Client
 	cwClient  *cloudwatch.Client
@@ -155,41 +163,37 @@ func (g *StorageReportGenerator) isEligibleBucket(tags map[string]string) bool {
 }
 
 func (g *StorageReportGenerator) collectBucketStatistics(ctx context.Context, buckets []string) ([]BucketStats, error) {
-	var wg sync.WaitGroup
 	statsChan := make(chan BucketStats, len(buckets))
 	errorChan := make(chan error, len(buckets))
 
-	for _, bucketName := range buckets {
-		log.Printf("Collecting stats for bucket: %s\n", bucketName)
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
+	g.processBuckets(ctx, buckets, statsChan, errorChan)
 
-			stats, err := g.getBucketStatistics(ctx, name)
-			if err != nil {
-				errorChan <- fmt.Errorf("failed to get stats for bucket %s: %w", name, err)
-				return
-			}
-
-			statsChan <- stats
-		}(bucketName)
-	}
-
-	wg.Wait()
 	close(statsChan)
 	close(errorChan)
 
-	for err := range errorChan {
-		return nil, err
-	}
-
-	// Collect results
 	var bucketStats []BucketStats
 	for stats := range statsChan {
 		bucketStats = append(bucketStats, stats)
 	}
 
-	// Sort by bucket name for consistent output
+	var errors []error
+	for err := range errorChan {
+		errors = append(errors, err)
+	}
+
+	// Log errors but continue with partial data
+	if len(errors) > 0 {
+		for _, err := range errors {
+			log.Printf("Warning: %v", err)
+		}
+		// Only fail if we got NO successful results
+		if len(bucketStats) == 0 {
+			return nil, fmt.Errorf("failed to collect any bucket statistics: %d errors", len(errors))
+		}
+		log.Printf("Successfully collected stats for %d/%d buckets (%d errors)",
+			len(bucketStats), len(buckets), len(errors))
+	}
+
 	sort.Slice(bucketStats, func(i, j int) bool {
 		return bucketStats[i].Name < bucketStats[j].Name
 	})
@@ -197,19 +201,67 @@ func (g *StorageReportGenerator) collectBucketStatistics(ctx context.Context, bu
 	return bucketStats, nil
 }
 
+func (g *StorageReportGenerator) processBuckets(
+	ctx context.Context,
+	buckets []string,
+	statsChan chan<- BucketStats,
+	errorChan chan<- error,
+) {
+	var wg sync.WaitGroup
+	bucketQueue := make(chan string, len(buckets))
+
+	for _, bucket := range buckets {
+		bucketQueue <- bucket
+	}
+	close(bucketQueue)
+
+	numWorkers := MaxConcurrentWorkers
+	if len(buckets) < numWorkers {
+		numWorkers = len(buckets)
+	}
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+
+			for bucketName := range bucketQueue {
+				log.Printf("Worker %d processing bucket: %s", workerID, bucketName)
+
+				bucketCtx, cancel := context.WithTimeout(ctx, BucketWorkerTimeout)
+				stats, err := g.getBucketStatistics(bucketCtx, bucketName)
+				cancel()
+
+				if err != nil {
+					errorChan <- fmt.Errorf("worker %d failed for bucket %s: %w",
+						workerID, bucketName, err)
+					continue
+				}
+
+				statsChan <- stats
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
 func (g *StorageReportGenerator) getBucketStatistics(ctx context.Context, bucketName string) (BucketStats, error) {
+	if err := ctx.Err(); err != nil {
+		return BucketStats{}, fmt.Errorf("context cancelled: %w", err)
+	}
+
 	stats := BucketStats{
 		Name: bucketName,
 	}
 
-	// Get bucket tags
 	tags, err := g.getBucketTags(ctx, bucketName)
 	if err != nil {
-		tags = make(map[string]string) // Continue with empty tags
+		tags = make(map[string]string)
+		log.Printf("Warning: failed to get tags for %s: %v", bucketName, err)
 	}
 	stats.Tags = tags
 
-	// Get storage metrics from CloudWatch
 	totalSize, totalObjects, err := g.getStorageMetrics(ctx, bucketName)
 	if err != nil {
 		return stats, fmt.Errorf("failed to get storage metrics: %w", err)
@@ -218,7 +270,6 @@ func (g *StorageReportGenerator) getBucketStatistics(ctx context.Context, bucket
 	stats.TotalSize = totalSize
 	stats.TotalObjects = totalObjects
 
-	// Get prefix statistics
 	prefixStats, err := g.getPrefixStatistics(ctx, bucketName)
 	if err != nil {
 		return stats, fmt.Errorf("failed to get prefix statistics: %w", err)
@@ -233,6 +284,7 @@ func (g *StorageReportGenerator) getStorageMetrics(ctx context.Context, bucketNa
 	endTime := time.Now()
 	startTime := endTime.Add(-48 * time.Hour)
 
+	// Target just the storage classes we care about
 	storageTypes := []string{
 		"StandardStorage",
 		"GlacierInstantRetrievalStorage",
@@ -263,10 +315,12 @@ func (g *StorageReportGenerator) getStorageMetrics(ctx context.Context, bucketNa
 
 		sizeResult, err := g.cwClient.GetMetricStatistics(ctx, sizeInput)
 		if err != nil {
+			log.Printf("Warning: failed to get %s metrics for %s: %v",
+				storageType, bucketName, err)
 			continue
 		}
 
-		if len(sizeResult.Datapoints) > 0 {
+		if len(sizeResult.Datapoints) > 0 && sizeResult.Datapoints[0].Maximum != nil {
 			totalSize += int64(*sizeResult.Datapoints[0].Maximum)
 		}
 	}
@@ -297,7 +351,7 @@ func (g *StorageReportGenerator) getStorageMetrics(ctx context.Context, bucketNa
 	}
 
 	var totalObjects int64
-	if len(countResult.Datapoints) > 0 {
+	if len(countResult.Datapoints) > 0 && countResult.Datapoints[0].Maximum != nil {
 		totalObjects = int64(*countResult.Datapoints[0].Maximum)
 	}
 
@@ -305,7 +359,37 @@ func (g *StorageReportGenerator) getStorageMetrics(ctx context.Context, bucketNa
 }
 
 func (g *StorageReportGenerator) getPrefixStatistics(ctx context.Context, bucketName string) ([]PrefixStats, error) {
-	var prefixStats []PrefixStats
+	// Create timeout context for the entire prefix collection
+	prefixCtx, cancel := context.WithTimeout(ctx, PrefixCollectionTimeout)
+	defer cancel()
+
+	prefixes, err := g.listTopLevelPrefixes(prefixCtx, bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list top-level prefixes: %w", err)
+	}
+
+	if len(prefixes) == 0 {
+		return []PrefixStats{}, nil
+	}
+
+	log.Printf("Found %d top-level prefixes for bucket %s, processing with worker pool",
+		len(prefixes), bucketName)
+
+	prefixStats, err := g.processPrefixes(prefixCtx, bucketName, prefixes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort by size descending
+	sort.Slice(prefixStats, func(i, j int) bool {
+		return prefixStats[i].Size > prefixStats[j].Size
+	})
+
+	return prefixStats, nil
+}
+
+func (g *StorageReportGenerator) listTopLevelPrefixes(ctx context.Context, bucketName string) ([]string, error) {
+	var prefixes []string
 
 	paginator := s3.NewListObjectsV2Paginator(g.s3Client, &s3.ListObjectsV2Input{
 		Bucket:    aws.String(bucketName),
@@ -314,56 +398,151 @@ func (g *StorageReportGenerator) getPrefixStatistics(ctx context.Context, bucket
 	})
 
 	for paginator.HasMorePages() {
-		result, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list objects: %w", err)
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled while listing prefixes: %w", err)
 		}
 
-		// Process each common prefix (top-level directory) in this page
+		result, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+
 		for _, commonPrefix := range result.CommonPrefixes {
-			prefix := aws.ToString(commonPrefix.Prefix)
-
-			// Get statistics for this prefix by listing its contents
-			size, count, err := g.calculatePrefixStats(ctx, bucketName, prefix)
-			if err != nil {
-				continue
-			}
-
-			prefixStats = append(prefixStats, PrefixStats{
-				Prefix:      prefix,
-				Size:        size,
-				ObjectCount: count,
-			})
+			prefixes = append(prefixes, aws.ToString(commonPrefix.Prefix))
 		}
 	}
 
-	sort.Slice(prefixStats, func(i, j int) bool {
-		return prefixStats[i].Size > prefixStats[j].Size
-	})
-
-	return prefixStats, nil
+	return prefixes, nil
 }
 
-func (g *StorageReportGenerator) calculatePrefixStats(ctx context.Context, bucketName, prefix string) (int64, int64, error) {
-	var totalSize, totalCount int64
+func (g *StorageReportGenerator) processPrefixes(
+	ctx context.Context,
+	bucketName string,
+	prefixes []string,
+) ([]PrefixStats, error) {
+	var wg sync.WaitGroup
+	prefixQueue := make(chan string, len(prefixes))
+	resultsChan := make(chan PrefixStats, len(prefixes))
+	errorsChan := make(chan error, len(prefixes))
 
-	// List all objects with this prefix
+	for _, prefix := range prefixes {
+		prefixQueue <- prefix
+	}
+	close(prefixQueue)
+
+	numWorkers := PrefixWorkerPoolSize
+	if len(prefixes) < numWorkers {
+		numWorkers = len(prefixes)
+	}
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+
+			for prefix := range prefixQueue {
+				// Check context before processing each prefix
+				if err := ctx.Err(); err != nil {
+					errorsChan <- fmt.Errorf("worker %d: context cancelled: %w", workerID, err)
+					return
+				}
+
+				log.Printf("Prefix worker %d processing: %s/%s", workerID, bucketName, prefix)
+
+				size, count, err := g.calculatePrefixStats(ctx, bucketName, prefix)
+				if err != nil {
+					errorsChan <- fmt.Errorf("worker %d failed for prefix %s: %w",
+						workerID, prefix, err)
+					continue
+				}
+
+				resultsChan <- PrefixStats{
+					Prefix:      prefix,
+					Size:        size,
+					ObjectCount: count,
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(resultsChan)
+	close(errorsChan)
+
+	// Collect all results
+	var results []PrefixStats
+	for stats := range resultsChan {
+		results = append(results, stats)
+	}
+
+	// Check for errors - if ANY prefix failed, the report is incomplete
+	var errors []error
+	for err := range errorsChan {
+		errors = append(errors, err)
+	}
+
+	if len(errors) > 0 {
+		for _, err := range errors {
+			log.Printf("Prefix processing error: %v", err)
+		}
+		return nil, fmt.Errorf("failed to process %d/%d prefixes completely - report would be incomplete",
+			len(errors), len(prefixes))
+	}
+
+	// Verify we got ALL prefixes
+	if len(results) != len(prefixes) {
+		return nil, fmt.Errorf("incomplete prefix processing: expected %d, got %d",
+			len(prefixes), len(results))
+	}
+
+	log.Printf("Successfully processed all %d prefixes for bucket %s", len(results), bucketName)
+	return results, nil
+}
+
+func (g *StorageReportGenerator) calculatePrefixStats(
+	ctx context.Context,
+	bucketName,
+	prefix string,
+) (int64, int64, error) {
+	var totalSize, totalCount int64
+	pageCount := 0
+
 	paginator := s3.NewListObjectsV2Paginator(g.s3Client, &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucketName),
-		Prefix: aws.String(prefix),
+		Bucket:  aws.String(bucketName),
+		Prefix:  aws.String(prefix),
+		MaxKeys: aws.Int32(1000), // Max batch size
 	})
 
 	for paginator.HasMorePages() {
+		// Check context before each page
+		if err := ctx.Err(); err != nil {
+			return 0, 0, fmt.Errorf("context cancelled after processing %d objects in %s/%s: %w",
+				totalCount, bucketName, prefix, err)
+		}
+
 		result, err := paginator.NextPage(ctx)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, fmt.Errorf("failed to list page %d for %s/%s: %w",
+				pageCount, bucketName, prefix, err)
 		}
 
 		for _, object := range result.Contents {
 			totalSize += aws.ToInt64(object.Size)
 			totalCount++
 		}
+
+		pageCount++
+
+		// Log progress for large prefixes (every 10 pages = 10k objects)
+		if pageCount%PrefixProgressLogInterval == 0 {
+			log.Printf("Progress: %s/%s - processed %d pages, %d objects, %.2f GB so far",
+				bucketName, prefix, pageCount, totalCount,
+				float64(totalSize)/(1024*1024*1024))
+		}
 	}
+
+	log.Printf("Completed: %s/%s - %d objects, %.2f GB",
+		bucketName, prefix, totalCount, float64(totalSize)/(1024*1024*1024))
 
 	return totalSize, totalCount, nil
 }
