@@ -1,0 +1,5 @@
+bucket       = "your-project-name"
+key          = "your-stack-name.tfstate"
+use_lockfile = true
+region       = "your-region"
+encrypt      = true

@@ -1,57 +1,116 @@
 # DuraCloud (pilot)
 
-DuraCloud is a serverless application built using AWS SAM that provides robust file storage management with built-in data integrity verification through checksums.
+DuraCloud is a set of serverless components built using AWS services centered
+around digital preservation uses cases. It provides configuration and features
+on top of AWS S3 to support long term access to and preservation of files.
 
 ## Documentation
 
-- [Technical Documentation](technical-documentation.md) - Comprehensive overview of the system architecture, components, workflows, and security model
-- [Developer Guidelines](guidelines.md) - Detailed information for developers working on the project
+- [User Documentation](#)
+- [Technical Documentation](TECHNICAL.md)
 
 ## Prerequisites
 
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-- [AWS SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
 - [Docker](https://docs.docker.com/engine/install/)
 - [Go](https://go.dev/doc/install)
-- [Node.js](https://nodejs.org/en) (for documentation site)
+- [Saw](https://github.com/TylerBrock/saw) (for viewing logs)
+- [Terraform](https://developer.hashicorp.com/terraform)
 
-## Quick Start
+## Quick Start (development only)
 
-1. Configure AWS credentials (via profile or environment variables)
+1. Configure AWS credentials with a profile.
 
-2. Create a `.env` file with your AWS profile:
+2. Create a `.env` file with:
 
 ```
-STACK_NAME=your-profile-name
+AWS_ACCOUNT_ID=your-account-id
+AWS_PROFILE=your-profile-name
+AWS_REGION=your-region
+PROJECT_NAME=your-project-name
+STACK_NAME=your-stack-name
 ```
 
-3. Build and deploy:
+- `AWS_ACCOUNT_ID`: aws account id for a profile in your aws config
+- `AWS_PROFILE`: match a profile name from your aws config (or `default`)
+- `AWS_REGION`: match the region set for your aws profile
+- `PROJECT_NAME`: used to create resources needed by Terraform and build tasks
+- `STACK_NAME`: choose a unique prefix to apply to AWS resources created by Terraform
+
+3. Bootstrap a project:
 
 ```bash
-make pull
-make build
-make deploy-only stack=your-stack-name
-
-# you can run the build and deploy tasks in one step using:
-make deploy stack=your-stack-name
+make bootstrap
 ```
 
-4. Get test user credentials:
+This creates an S3 bucket and an ECR repository per function using the project name:
+
+- `https://your-project-name.s3.amazonaws.com`
+- `${ACCOUNT_ID}$.dkr.ecr.${REGION}$.amazonaws.com/your-project-name/${function}`
+
+4. Create Terraform backend config:
 
 ```bash
-make creds stack=your-stack-name
+make backend-config
 ```
 
-5. To clean up:
+This creates `duracloud.tfbackend` using your `.env` values.
+
+Then:
 
 ```bash
-make cleanup stack=your-stack-name
-make delete stack=your-stack-name
+make terraform-init
 ```
 
-> **Note**: Setting `stack` uniquely allows for multiple deployments to the same account. Created resources are prefixed with the `stack` name.
+If everything is prepared correctly the Terraform command should succeed. Resolve
+any issues before proceeding.
 
-For detailed build and configuration instructions, see the [Developer Guidelines](guidelines.md).
+5. Build and deploy:
+
+```bash
+make docker-pull # pulls required Docker base images
+make docker-build # builds all DuraCloud function Docker images
+make docker-push # pushes all DuraCloud function Docker images to ECR
+```
+
+The first build and push may take a few minutes to complete.
+
+```bash
+# deploy
+make terraform-plan # review output before deployment
+make terraform-apply # deploy the Terraform plan to create AWS resources
+```
+
+The apply step will take ~1-2 mins the first time it is run.
+
+After initial deployment if you only want to build and push a single
+function (i.e. a typical development workflow) then you can use:
+
+```bash
+make docker-deploy function=${function}
+# for example:
+make docker-deploy function=bucket-requested
+```
+
+This updates the image in ECR so subsequent invocations of the function
+will use the new image, and it should be a quick process.
+
+6. Get test user credentials:
+
+```bash
+make test-user-credentials
+```
+
+7. To clean up:
+
+```bash
+make workflow-cleanup # this empties s3 and table resources
+make terraform-destroy # deletes all AWS resources
+```
+
+## Summary
+
+> Setting `STACK_NAME` uniquely allows for multiple deployments to the same account. Created resources are prefixed with the `STACK_NAME`. Whenever you run a Terraform task the backend state key is updated to use the stack name from `.env` allowing for multiple stacks to be deployed. To collaborate on a stack use the same project name and stack name as another developer.
 
 ## Common Tasks
 
@@ -59,67 +118,85 @@ For detailed build and configuration instructions, see the [Developer Guidelines
 
 ```bash
 # Create buckets
-make file-copy file=files/create-buckets.txt bucket=your-stack-name-bucket-requested
+make workflow-upload \
+  file=files/create-buckets.txt bucket=your-stack-name-bucket-requested
+make output-logs func=bucket-requested interval=5m
 
 # Upload a file (adds record to checksum and scheduler tables)
-make file-copy file=files/upload-me.txt bucket=your-stack-name-pilot-ex-testing123
+make workflow-upload \
+  file=files/upload-me.txt bucket=your-stack-name-private
+make output-logs func=file-uploaded interval=5m
+# the file was uploaded to: your-stack-name-private/upload-me.txt
 
-# Trigger checksum verification (file must exist in bucket)
-make expire-ttl stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
+# Trigger checksum verification by expiring ttl
+make workflow-expire-ttl \
+  file=upload-me.txt bucket=your-stack-name-private
+make output-logs func=checksum-verification interval=5m
 
-# Force a checksum failure (file must exist in bucket)
-make checksum-fail stack=your-stack-name file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123
-make logs func=checksum-failure stack=your-stack-name interval=5m
+# Force a checksum failure
+make workflow-checksum-fail \
+  file=upload-me.txt bucket=your-stack-name-private
+make output-logs func=checksum-failure interval=5m
 
-# Delete a file (removes record from checksum and scheduler tables) (file must exist in bucket)
-make file-delete file=upload-me.txt bucket=your-stack-name-pilot-ex-testing123 # confirm triggered
+# Delete a file (removes record from checksum and scheduler tables)
+make workflow-delete \
+  file=upload-me.txt bucket=your-stack-name-private
+make output-logs func=file-deleted interval=5m
 
-# Generate a checksum csv report (uploads to managed bucket under fixed key)
-make report-csv file=files/abcdef123456.json.gz stack=your-stack-name
+# Generate a checksum csv report (uploads to managed bucket: exports)
+# We are using a prefab export file for relatively immediate results:
+# files/abcdef123456.json.gz
+make workflow-checksum-report
+make output-logs func=checksum-export-csv-report interval=5m
+
+# Generate a storage html report (uploads to managed bucket: reports)
+# This is not useful for bucket level storage stats given cloudwatch metrics
+# delay, but is fine for top level prefix counts
+make workflow-storage-report bucket=your-stack-name-private
+make output-logs func=report-generator interval=5m
 ```
 
 ### Viewing Logs
 
 ```bash
-make logs func=checksum-export-csv-report stack=your-stack-name interval=5m
-make logs func=checksum-verification stack=your-stack-name interval=5m
+make output-logs func=checksum-export-csv-report interval=5m
+make output-logs func=checksum-verification interval=5m
 ```
 
 ### Managing Buckets
 
 ```bash
-make bucket action=list
-make bucket action=create bucket=your-stack-name-tmp
-make bucket action=empty bucket=your-stack-name-tmp
-make bucket action=delete bucket=your-stack-name-tmp
+make bucket-manager action=list
+make bucket-manager action=create bucket=your-stack-name-private
+make bucket-manager action=empty bucket=your-stack-name-private
+make bucket-manager action=delete bucket=your-stack-name-private
 ```
 
 ### Running Functions
 
-Locally (note running locally is for basic debugging purposes only and may require additional configuration):
+Ensure the functions have been deployed. There is no run local option.
 
 ```bash
-cp events/checksum-export-csv-report/event.json event.json
-# update event.json to an appropriate bucket (i.e. your-stack-name)
-make invoke func=ChecksumExportCSVReportFunction event=event.json
+make run-function \
+  function=checksum-exporter \
+  event=events/checksum-exporter/event.json
 
-make invoke func=FileUploadedFunction event=events/file-uploaded/event.json
-```
+# Note: this supposes the file in the event payload exists
+make run-function \
+  function=checksum-export-csv-report \
+  event=events/checksum-export-csv-report/event.json
 
-Remotely:
-
-```bash
-make invoke-remove func=ChecksumExportCSVReportFunction event=events/checksum-export-csv-report/event.json stack=your-stack-name
-make invoke-remote func=ChecksumExporterFunction event=events/checksum-exporter/event.json stack=your-stack-name
-make invoke-remote func=ReportGeneratorFunction event=events/no-event/event.json stack=your-stack-name
+make run-function \
+  function=report-generator \
+  event=events/no-event/event.json
 ```
 
 ### Running Tests
 
 ```bash
-make test stack=your-stack-name
+make test
 ```
 
-For detailed information about testing, debugging, and development practices, see the [Developer Guidelines](guidelines.md).
+---
 
-For comprehensive system architecture and component details, see the [Technical Documentation](technical-documentation.md).
+For system architecture and component details see the [Technical Documentation](TECHNICAL.md).

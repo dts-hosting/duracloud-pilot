@@ -138,7 +138,6 @@ func processUploadedObject(
 		return err
 	}
 
-	time.Sleep(100 * time.Millisecond) // rate limit ourselves in case of very heavy bursts
 	return nil
 }
 
