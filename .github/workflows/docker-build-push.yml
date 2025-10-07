@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 env:
-  AWS_ACCOUNT_ID: 005622933699 # central account for DuraCloud images
+  AWS_ACCOUNT_ID: "005622933699" # central account for DuraCloud images
   AWS_REGION: us-west-2 # base region for builds and replication
   PROJECT_NAME: duracloud
   IMG_TAG: latest
