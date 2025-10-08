@@ -208,7 +208,7 @@ resource "aws_lambda_function" "checksum_verification_function" {
   package_type  = "Image"
   architectures = [local.lambda_architecture]
   timeout       = 900
-  memory_size   = 256
+  memory_size   = 1024
   description   = "DuraCloud function that processes checksum verification via TTL events"
 
   logging_config {
@@ -277,7 +277,7 @@ resource "aws_lambda_function" "file_uploaded_function" {
   package_type  = "Image"
   architectures = [local.lambda_architecture]
   timeout       = 900
-  memory_size   = 256
+  memory_size   = 1024
   description   = "DuraCloud function that processes s3 object uploaded events"
 
   logging_config {
