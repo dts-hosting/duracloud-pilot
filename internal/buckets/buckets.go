@@ -407,7 +407,7 @@ func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key str
 	}
 
 	bucketsRequested := len(buckets)
-	if bucketsRequested >= limit {
+	if bucketsRequested > limit {
 		return nil, ErrorExceededMaxBucketsPerRequest(limit, bucketsRequested)
 	}
 
