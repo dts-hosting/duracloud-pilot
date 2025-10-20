@@ -21,6 +21,9 @@ on top of AWS S3 to support long term access to and preservation of files.
 
 1. Configure AWS credentials with a profile.
 
+If performing these steps on behalf of Lyrasis, request information for the
+"duracloudexp" experimental account.
+
 2. Create a `.env` file with:
 
 ```
@@ -47,6 +50,9 @@ This creates an S3 bucket and an ECR repository per function using the project n
 
 - `https://your-project-name.s3.amazonaws.com`
 - `${ACCOUNT_ID}$.dkr.ecr.${REGION}$.amazonaws.com/your-project-name/${function}`
+
+Bootstrapping only needs to performed once per AWS account. Additional projects
+and stacks do not need to be bootstrapped.
 
 4. Create Terraform backend config:
 
