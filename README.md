@@ -93,9 +93,9 @@ After initial deployment if you only want to build and push a single
 function (i.e. a typical development workflow) then you can use:
 
 ```bash
-make docker-deploy function=${function}
+make docker-deploy-function function=${function}
 # for example:
-make docker-deploy function=bucket-requested
+make docker-deploy-function function=bucket-requested
 ```
 
 This updates the image in ECR so subsequent invocations of the function
@@ -113,6 +113,23 @@ make test-user-credentials
 make workflow-cleanup # this empties s3 and table resources
 make terraform-destroy # deletes all AWS resources
 ```
+
+## Reset
+
+If multiple people work on the same stack using different architectures
+(i.e. Mac vs. Linux) then Terraform will need to be updated each time
+and the functions re-built, re-pushed and re-deployed:
+
+```bash
+# set stack in .env
+make terraform-init
+make terraform-apply
+make docker-redeploy
+```
+
+So ideally this repository is only directly used for stacks owned
+by a single developer unless collaborating using the same PC type
+(arm vs x86).
 
 ## Summary
 
