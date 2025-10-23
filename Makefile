@@ -55,13 +55,22 @@ docker-build-function: ## Build a specific function
 	@docker build . --build-arg FUNCTION_NAME=$(function) \
 		-t $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
 
-.PHONY: docker-deploy
-docker-deploy: ## Build and push a specific function
+.PHONY: docker-deploy-function
+docker-deploy-function: ## Build, push and update a specific function
 	@$(MAKE) docker-build-function function=$(function)
 	@$(MAKE) docker-push-function function=$(function)
-	@aws lambda update-function-code \
-		--function-name $(STACK_NAME)-$(function) \
-		--image-uri $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
+	@$(MAKE) update-function function=$(function)
+
+.PHONY: docker-redeploy
+docker-redeploy: ## Build, push and redeploy all functions
+	@$(MAKE) docker-deploy-function function=bucket-requested
+	@$(MAKE) docker-deploy-function function=checksum-export-csv-report
+	@$(MAKE) docker-deploy-function function=checksum-exporter
+	@$(MAKE) docker-deploy-function function=checksum-failure
+	@$(MAKE) docker-deploy-function function=checksum-verification
+	@$(MAKE) docker-deploy-function function=file-deleted
+	@$(MAKE) docker-deploy-function function=file-uploaded
+	@$(MAKE) docker-deploy-function function=report-generator
 
 .PHONY: docker-pull
 docker-pull: ## Pull required docker images
@@ -130,6 +139,23 @@ test: ## Run all tests and cleanup resources
 test-user-credentials: ## Output the test user access key and secret
 	@aws ssm get-parameter --name "/$(STACK_NAME)/iam/test/access-key-id"
 	@aws ssm get-parameter --name "/$(STACK_NAME)/iam/test/secret-access-key"
+
+.PHONY: update-function
+update-function: ## Update the function code using latest Docker img
+	@aws lambda update-function-code \
+		--function-name $(STACK_NAME)-$(function) \
+		--image-uri $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME)/$(function):$(STACK_NAME)
+
+.PHONY: update-functions
+update-functions: ## Update all functions using latest Docker img
+	@$(MAKE) update-function function=bucket-requested
+	@$(MAKE) update-function function=checksum-export-csv-report
+	@$(MAKE) update-function function=checksum-exporter
+	@$(MAKE) update-function function=checksum-failure
+	@$(MAKE) update-function function=checksum-verification
+	@$(MAKE) update-function function=file-deleted
+	@$(MAKE) update-function function=file-uploaded
+	@$(MAKE) update-function function=report-generator
 
 .PHONY: workflow-checksum-fail
 workflow-checksum-fail: ## Force a checksum failure (bucket=name file=key)
