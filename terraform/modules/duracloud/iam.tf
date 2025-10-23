@@ -866,7 +866,7 @@ resource "aws_ssm_parameter" "test_user_access_key_parameter" {
 resource "aws_ssm_parameter" "test_user_secret_access_key_parameter" {
   name        = "/${local.stack_name}/iam/test/secret-access-key"
   description = "Secret Access Key for the S3 test user"
-  type        = "String"
+  type        = "SecureString"
   value       = aws_iam_access_key.test_user_access_key.secret
   tier        = "Standard"
 
