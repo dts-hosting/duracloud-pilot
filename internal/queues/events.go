@@ -73,6 +73,12 @@ func (e *S3EventBridgeEvent) IsRestrictedBucket() bool {
 	return buckets.IsRestrictedBucket(e.BucketName())
 }
 
+// IsPrefix checks if the object key represents a prefix (directory)
+func (e *S3EventBridgeEvent) IsPrefix() bool {
+	key := e.ObjectKey()
+	return len(key) > 0 && key[len(key)-1] == '/'
+}
+
 // UnwrapS3EventBridgeEvents extracts all S3 events from the SQS message
 func (w *SQSEventWrapper) UnwrapS3EventBridgeEvents() ([]S3EventBridgeEventWithMessageId, []events.SQSBatchItemFailure) {
 	var parsedEvents []S3EventBridgeEventWithMessageId
