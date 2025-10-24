@@ -66,7 +66,9 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 			continue
 		}
 
-		if !parsedEvent.IsObjectCreated() || parsedEvent.IsIgnoreFilesBucket() {
+		if !parsedEvent.IsObjectCreated() ||
+			parsedEvent.IsIgnoreFilesBucket() ||
+			parsedEvent.IsPrefix() {
 			continue
 		}
 
