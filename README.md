@@ -122,7 +122,7 @@ and the functions re-built, re-pushed and re-deployed:
 
 ```bash
 # set stack in .env
-make terraform-init
+make terraform-plan
 make terraform-apply
 make docker-redeploy
 ```

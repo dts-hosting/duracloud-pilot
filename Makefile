@@ -114,11 +114,11 @@ run-function: ## Invoke a deployed function
 		/dev/stdout
 
 .PHONY: terraform-apply
-terraform-apply: backend-config ## Run Terraform apply
+terraform-apply: backend-config terraform-init ## Run Terraform apply
 	@$(TF_VARS) terraform apply -auto-approve
 
 .PHONY: terraform-destroy
-terraform-destroy: backend-config ## Run Terraform destroy
+terraform-destroy: backend-config terraform-init ## Run Terraform destroy
 	@$(TF_VARS) terraform destroy
 
 .PHONY: terraform-init
@@ -126,7 +126,7 @@ terraform-init: backend-config ## Run Terraform init
 	@terraform init -backend-config="duracloud.tfbackend" -reconfigure -upgrade
 
 .PHONY: terraform-plan
-terraform-plan: backend-config ## Run Terraform plan
+terraform-plan: backend-config terraform-init ## Run Terraform plan
 	@$(TF_VARS) terraform plan
 
 .PHONY: test
