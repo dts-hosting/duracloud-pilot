@@ -13,6 +13,7 @@ terraform {
 provider "aws" {}
 
 variable "arch" {}
+variable "email" { default = "" }
 variable "repo" {}
 variable "stack" {}
 
@@ -20,7 +21,7 @@ module "duracloud" {
   source = "./terraform/modules/duracloud"
 
   stack_name                 = var.stack
-  alert_email_address        = ""
+  alert_email_address        = var.email
   checksum_exporter_schedule = "cron(0 6 * * ? *)"
   lambda_architecture        = var.arch
   report_generator_schedule  = "cron(0 8 * * ? *)"

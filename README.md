@@ -30,6 +30,7 @@ If performing these steps on behalf of Lyrasis, request information for the
 AWS_ACCOUNT_ID=your-account-id
 AWS_PROFILE=your-profile-name
 AWS_REGION=your-region
+ALERT_EMAIL=your-email-address
 PROJECT_NAME=your-project-name
 STACK_NAME=your-stack-name
 ```
@@ -37,6 +38,7 @@ STACK_NAME=your-stack-name
 - `AWS_ACCOUNT_ID`: aws account id for a profile in your aws config
 - `AWS_PROFILE`: match a profile name from your aws config (or `default`)
 - `AWS_REGION`: match the region set for your aws profile
+- `ALERT_EMAIL`: email address for alerts (omit or use "" to disable)
 - `PROJECT_NAME`: used to create resources needed by Terraform and build tasks
 - `STACK_NAME`: choose a unique prefix to apply to AWS resources created by Terraform
 

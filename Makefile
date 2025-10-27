@@ -14,6 +14,7 @@ else
 endif
 
 TF_VARS := TF_VAR_arch=$(LAMBDA_ARCH) \
+	TF_VAR_email=$(ALERT_EMAIL) \
 	TF_VAR_repo=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PROJECT_NAME) \
 	TF_VAR_stack=$(STACK_NAME)
 
