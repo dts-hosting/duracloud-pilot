@@ -99,6 +99,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	if recordCount == 0 {
 		log.Printf("Empty file processed: %s (headers only)", objectKey)
+		return nil
 	} else {
 		log.Printf("Processed %d records from %s", recordCount, objectKey)
 	}
