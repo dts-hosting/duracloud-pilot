@@ -1,0 +1,4 @@
+{"itemCount":1,"md5Checksum":"Tj2SRbpYq/dOqm2Fdq7Q7A==","etag":"b7c744d5c162de396bf0b12a51163cbe-1","dataFileS3Key":"exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file1.json.gz"}
+{"itemCount":0,"md5Checksum":"FjvgqIxwymKf1RbbqtrZag==","etag":"7deb4078f238dd87d6af0538152c04e9-1","dataFileS3Key":"exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file2.json.gz"}
+{"itemCount":0,"md5Checksum":"FjvgqIxwymKf1RbbqtrZag==","etag":"7deb4078f238dd87d6af0538152c04e9-1","dataFileS3Key":"exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file3.json.gz"}
+{"itemCount":1,"md5Checksum":"u7jkaJLEasxIkeJYuQAo/A==","etag":"0424d0ffc0d21b1c45029d778858d575-1","dataFileS3Key":"exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file4.json.gz"}

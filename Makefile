@@ -165,7 +165,15 @@ workflow-checksum-fail: ## Force a checksum failure (bucket=name file=key)
 .PHONY: workflow-checksum-report
 workflow-checksum-report: ## Generate a checksum csv report
 	@aws s3 cp files/abcdef123456.json.gz \
-		s3://$(STACK_NAME)-managed/exports/checksum-table/2025-08-25/AWSDynamoDB/01234567890123456789/data/abcdef123456.json.gz
+		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file1.json.gz
+	@aws s3 cp files/abcdef123456.json.gz \
+		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file2.json.gz
+	@aws s3 cp files/abcdef654321.json.gz \
+		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file3.json.gz
+	@aws s3 cp files/abcdef654321.json.gz \
+		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file4.json.gz
+	@aws s3 cp files/manifest-files.json \
+		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/manifest-files.json
 
 .PHONY: workflow-cleanup
 workflow-cleanup: ## Cleanup (clear out) deployed bucket and table resources

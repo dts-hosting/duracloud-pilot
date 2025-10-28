@@ -78,12 +78,6 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			errorMessage = lastError.String()
 		}
 
-		// TODO: handle failure
-		// - retry in case something unexpected happened?
-		// - Upload report to s3 managed bucket?
-		// - Send email?
-		// - etc.
-
 		notification := notifications.ChecksumFailureNotification{
 			Account:      accountID,
 			Bucket:       bucket,

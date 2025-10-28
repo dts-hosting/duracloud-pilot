@@ -33,6 +33,12 @@ variable "checksum_export_csv_report_image_uri" {
   default     = "docker.io/duracloud/checksum-export-csv-report:latest"
 }
 
+variable "checksum_export_csv_report_storage" {
+  description = "Amount of storage for Checksum Export CSV report function"
+  type        = number
+  default     = 512
+}
+
 variable "checksum_failure_image_uri" {
   description = "Docker image for Checksum Failure function"
   type        = string
