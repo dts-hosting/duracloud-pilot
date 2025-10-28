@@ -278,6 +278,7 @@ func EnableInventory(ctx context.Context, s3Client *s3.Client, srcBucketName str
 				types.InventoryOptionalFieldSize,
 				types.InventoryOptionalFieldLastModifiedDate,
 				types.InventoryOptionalFieldStorageClass,
+				types.InventoryOptionalFieldReplicationStatus,
 			},
 		},
 	})
