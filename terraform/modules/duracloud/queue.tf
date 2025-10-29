@@ -1,7 +1,11 @@
 # SQS Queues for S3 event processing
 resource "aws_sqs_queue" "object_created_dlq" {
   name                      = "${local.stack_name}-object-created-dlq"
-  message_retention_seconds = 1209600 # 14 days
+  message_retention_seconds = 604800 # 7 days
+
+  redrive_allow_policy = jsonencode({
+    redrivePermission = "allowAll"
+  })
 
   tags = {
     Name = "${local.stack_name}-object-created-dlq"
@@ -25,7 +29,11 @@ resource "aws_sqs_queue" "object_created" {
 
 resource "aws_sqs_queue" "object_deleted_dlq" {
   name                      = "${local.stack_name}-object-deleted-dlq"
-  message_retention_seconds = 1209600 # 14 days
+  message_retention_seconds = 604800 # 7 days
+
+  redrive_allow_policy = jsonencode({
+    redrivePermission = "allowAll"
+  })
 
   tags = {
     Name = "${local.stack_name}-object-deleted-dlq"
