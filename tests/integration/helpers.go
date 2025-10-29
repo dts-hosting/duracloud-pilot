@@ -473,15 +473,6 @@ func uploadRequestAndWait(t *testing.T, ctx context.Context, s3Client *s3.Client
 	}
 }
 
-func uploadToS3(ctx context.Context, s3Client *s3.Client, bucketName, key, content string) error {
-	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(key),
-		Body:   strings.NewReader(content),
-	})
-	return err
-}
-
 func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName, stackName string) {
 	isPublicBucket := strings.HasSuffix(bucketName, buckets.PublicSuffix)
 

@@ -219,6 +219,10 @@ make run-function \
 ### Running Tests
 
 ```bash
+# run local tests only
+go test ./internal/... -v
+
+# run all tests, including those that require AWS integration
 make test
 ```
 

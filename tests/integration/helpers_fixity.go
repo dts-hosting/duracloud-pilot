@@ -165,7 +165,7 @@ func (h *FixityTestHelper) SimulateCorruption(t *testing.T, bucketName, fileName
 
 // UploadTestFile uploads a test file to S3 and returns the expected checksum
 func (h *FixityTestHelper) UploadTestFile(t *testing.T, bucketName, fileName, content string) string {
-	err := uploadToS3(h.Context, h.Clients.S3, bucketName, fileName, content)
+	err := files.UploadObject(h.Context, h.Clients.S3, bucketName, fileName, strings.NewReader(content))
 	require.NoError(t, err, "Should upload test file %s to bucket %s", fileName, bucketName)
 
 	expectedChecksum := fmt.Sprintf("%x", md5.Sum([]byte(content)))

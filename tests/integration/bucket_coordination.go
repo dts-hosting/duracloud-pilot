@@ -3,8 +3,10 @@ package integration
 import (
 	"context"
 	"duracloud/internal/buckets"
+	"duracloud/internal/files"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -51,7 +53,7 @@ func (c *BucketCreationCoordinator) SubmitBucketCreationRequest(
 		triggerBucket := fmt.Sprintf("%s%s", request.StackName, buckets.BucketRequestedSuffix)
 		requestKey := fmt.Sprintf("test-request-%d.txt", time.Now().UnixNano()) // Use nanoseconds for uniqueness
 
-		err := uploadToS3(ctx, s3Client, triggerBucket, requestKey, request.RequestContent)
+		err := files.UploadObject(ctx, s3Client, triggerBucket, requestKey, strings.NewReader(request.RequestContent))
 		if err != nil {
 			uploadComplete <- fmt.Errorf("failed to upload request file: %w", err)
 			return

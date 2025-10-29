@@ -27,6 +27,7 @@ func (obj S3Object) URI() string {
 }
 
 // DownloadObject returns a streaming reader for S3 object with optional gzip decompression
+// TODO: consolidate usage and use S3Object
 func DownloadObject(ctx context.Context, s3Client *s3.Client, bucket, key string, decompress bool) (io.ReadCloser, error) {
 	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
@@ -56,6 +57,17 @@ func TryObject(ctx context.Context, s3Client *s3.Client, obj S3Object) bool {
 		Key:    aws.String(obj.Key),
 	})
 	return err == nil
+}
+
+// UploadObject with given reader for content
+// TODO: consolidate usage and use S3Object
+func UploadObject(ctx context.Context, s3Client *s3.Client, bucketName, key string, content io.Reader) error {
+	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+		Body:   content,
+	})
+	return err
 }
 
 type gzipReadCloser struct {
