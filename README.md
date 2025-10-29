@@ -222,6 +222,21 @@ make run-function \
 make test
 ```
 
+### Processing DLQ manually
+
+```bash
+export AWS_PROFILE=profile
+aws stepfunctions start-execution \
+  --state-machine-arn arn:aws:states:${REGION}:${ACCOUNT}:stateMachine:${STACK}-dlq-redrive \
+  --output json
+
+# Check in on it
+sleep 10
+aws stepfunctions get-execution-history \
+    --execution-arn arn:aws:states:${REGION}:${ACCOUNT}:execution:${STACK}-dlq-redrive:${ARN} \
+    --output json | jq '.events[] | select(.type == "TaskSucceeded" or .type == "TaskFailed") | {type: .type, taskName: .previousEventId, stateEnteredEventId}'
+```
+
 ---
 
 For system architecture and component details see the [Technical Documentation](TECHNICAL.md).
