@@ -169,8 +169,8 @@ make workflow-delete \
 make output-logs func=file-deleted interval=5m
 
 # Generate a checksum csv report (uploads to managed bucket: exports)
-# We are using a prefab export file for relatively immediate results:
-# files/abcdef123456.json.gz
+# We are using a prefab export files for relatively immediate results:
+# files/manifest-files.json,files/abcdef123456.json.gz,files/abcdef654321.json.gz
 make workflow-checksum-report
 make output-logs func=checksum-export-csv-report interval=5m
 

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,9 +18,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// This is an approx. overestimation of average csv row size (bytes)
+const ROW_SIZE_ESTIMATE = 180
+
 var (
 	s3Client *s3.Client
 )
+
+type csvOutput struct {
+	file   *os.File
+	writer *csv.Writer
+}
 
 func init() {
 	awsConfig, err := config.LoadDefaultConfig(context.Background())
@@ -29,10 +39,11 @@ func init() {
 	s3Client = s3.NewFromConfig(awsConfig)
 }
 
-// TODO: one file in, one file out. However we may want to create
-// 1 file per bucket in the future if these export files are large.
 func handler(ctx context.Context, event json.RawMessage) error {
 	var s3Event exports.S3Event
+	var manifestFiles []string
+	var totalItems int
+	outputFiles := make(map[string]*csvOutput)
 
 	if err := json.Unmarshal(event, &s3Event); err != nil {
 		return fmt.Errorf("failed to parse S3 event: %w", err)
@@ -44,93 +55,141 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	bucketName := s3Event.BucketName()
 	objectKey := s3Event.ObjectKey()
-	fileId := s3Event.FileId()
 
-	log.Printf("Bucket: %s, Key: %s, Id: %s", bucketName, objectKey, fileId)
+	if !strings.HasSuffix(objectKey, exports.ManifestFile) {
+		return fmt.Errorf("invalid manifest file: %s", objectKey)
+	}
 
-	exportArn, err := s3Event.ObjectExportArn()
+	log.Printf("Processing manifest: %s, Key: %s", bucketName, objectKey)
+
+	// Process the manifest and collect the files to process
+	manifest, err := files.DownloadObject(ctx, s3Client, bucketName, objectKey, false)
 	if err != nil {
-		return fmt.Errorf("failed to extract export ARN: %w", err)
+		return fmt.Errorf("failed to download manifest for %s: %w", objectKey, err)
 	}
+	defer func() { _ = manifest.Close() }()
 
-	date, err := s3Event.ObjectDate()
-	if err != nil {
-		return fmt.Errorf("failed to extract date: %w", err)
-	}
-
-	log.Printf("Export ARN: %s, Date: %s", exportArn, date)
-
-	reader, err := files.DownloadObject(ctx, s3Client, bucketName, objectKey, true)
-	if err != nil {
-		return fmt.Errorf("failed to download export data for %s: %w", objectKey, err)
-	}
-	defer func() { _ = reader.Close() }()
-
-	csvFile, err := os.CreateTemp("", "export-*.csv")
-	if err != nil {
-		return fmt.Errorf("failed to create temp CSV file: %w", err)
-	}
-	defer func() { _ = os.Remove(csvFile.Name()) }()
-
-	csvWriter := csv.NewWriter(csvFile)
-	if err := csvWriter.Write(exports.ExportHeaders); err != nil {
-		_ = csvFile.Close()
-		return fmt.Errorf("failed to write CSV headers: %w", err)
-	}
-
-	recordCount, err := exports.ProcessExport(reader, func(rec *exports.ExportRecord) error {
-		if err := csvWriter.Write(rec.ToCSVRow()); err != nil {
-			return fmt.Errorf("failed to write CSV row: %w", err)
+	_, err = exports.ProcessExport(manifest, func(rec *exports.ManifestEntry) error {
+		if rec.ItemCount > 0 {
+			manifestFiles = append(manifestFiles, rec.DataFileS3Key)
 		}
-		csvWriter.Flush()
-		return csvWriter.Error()
-	})
-
-	if err != nil {
-		_ = csvFile.Close()
-		return fmt.Errorf("failed to process export data for %s: %w", objectKey, err)
-	}
-
-	csvWriter.Flush()
-	if err := csvWriter.Error(); err != nil {
-		_ = csvFile.Close()
-		return fmt.Errorf("CSV writer error: %w", err)
-	}
-
-	if recordCount == 0 {
-		log.Printf("Empty file processed: %s (headers only)", objectKey)
+		totalItems += rec.ItemCount
 		return nil
-	} else {
-		log.Printf("Processed %d records from %s", recordCount, objectKey)
-	}
-
-	csvFilename := fmt.Sprintf("exports/checksum-table/%s/CSV/%s/export_%s.csv", date, exportArn, fileId)
-
-	// Close the write handle before reopening for read
-	_ = csvFile.Close()
-
-	uploadFile, err := os.Open(csvFile.Name())
+	})
 	if err != nil {
-		return fmt.Errorf("failed to reopen CSV file: %w", err)
-	}
-	defer func() { _ = uploadFile.Close() }()
-
-	input := &s3.PutObjectInput{
-		Bucket: aws.String(bucketName),
-		Key:    aws.String(csvFilename),
-		Body:   uploadFile,
+		return fmt.Errorf("failed to process manifest: %w", err)
 	}
 
-	_, err = s3Client.PutObject(ctx, input)
-	if err != nil {
-		return fmt.Errorf("failed to upload CSV for %s: %w", objectKey, err)
+	log.Printf(
+		"Manifest processed: %s, Key: %s, Items: %d, EstimatedSize: %d",
+		bucketName, objectKey, totalItems, totalItems*ROW_SIZE_ESTIMATE,
+	)
+
+	// Process each file
+	for _, manifestFile := range manifestFiles {
+		log.Printf("Processing export: %s, Key: %s", bucketName, manifestFile)
+
+		if err := processFile(ctx, bucketName, manifestFile, outputFiles); err != nil {
+			for _, output := range outputFiles {
+				output.writer.Flush()
+				_ = output.file.Close()
+				_ = os.Remove(output.file.Name())
+			}
+			return fmt.Errorf("failed to process file %s: %w", manifestFile, err)
+		}
 	}
 
-	log.Printf("Successfully wrote CSV Report at %s to S3", csvFilename)
-	log.Printf("Successfully processed %s", objectKey)
+	// Cleanup before upload
+	for _, output := range outputFiles {
+		output.writer.Flush()
+		if err := output.writer.Error(); err != nil {
+			return fmt.Errorf("error flushing CSV writer: %w", err)
+		}
+		_ = output.file.Close()
+	}
+
+	// Now upload the CSV report files
+	date := time.Now().UTC().Format("2006-01-02")
+	for bucket, output := range outputFiles {
+		uploadFilename := fmt.Sprintf("exports/checksum-table/%s/CSV/%s.csv", date, bucket)
+		tempFilePath := output.file.Name()
+
+		uploadFile, err := os.Open(tempFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to reopen CSV file: %w", err)
+		}
+
+		log.Printf("Uploading CSV Report: %s, Key: %s", bucketName, uploadFilename)
+
+		input := &s3.PutObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(uploadFilename),
+			Body:   uploadFile,
+		}
+
+		_, err = s3Client.PutObject(ctx, input)
+		_ = uploadFile.Close()
+
+		if err != nil {
+			return fmt.Errorf("failed to upload CSV for %s to %s: %w", bucket, uploadFilename, err)
+		}
+
+		_ = os.Remove(tempFilePath)
+		log.Printf("Successfully wrote CSV Report to S3: %s, Key: %s", bucket, uploadFilename)
+	}
+
+	log.Printf("Successfully processed manifest: %s, Key: %s", bucketName, objectKey)
+
 	return nil
 }
 
 func main() {
 	lambda.Start(handler)
+}
+
+func processFile(ctx context.Context, bucket string, object string, out map[string]*csvOutput) error {
+	file, err := files.DownloadObject(ctx, s3Client, bucket, object, true)
+	if err != nil {
+		return fmt.Errorf("failed to download export data for %s: %w", object, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	_, err = exports.ProcessExport(file, func(rec *exports.ExportRecord) error {
+		// Use the bucket name from the record as the key
+		bucketName := rec.Item.BucketName.S
+		output, ok := out[bucketName]
+
+		if !ok {
+			// Create new temp file and writer for this bucket
+			csvFile, err := os.CreateTemp("", fmt.Sprintf("%s-*.csv", bucketName))
+			if err != nil {
+				return fmt.Errorf("failed to create temp CSV file: %w", err)
+			}
+
+			csvWriter := csv.NewWriter(csvFile)
+			if err := csvWriter.Write(exports.ExportHeaders); err != nil {
+				_ = csvFile.Close()
+				_ = os.Remove(csvFile.Name())
+				return fmt.Errorf("failed to write CSV headers: %w", err)
+			}
+
+			output = &csvOutput{
+				file:   csvFile,
+				writer: csvWriter,
+			}
+			out[bucketName] = output
+		}
+
+		if err := output.writer.Write(rec.ToCSVRow()); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error during processing of export file: %w", err)
+	}
+
+	return nil
 }

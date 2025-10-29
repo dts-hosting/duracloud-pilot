@@ -12,11 +12,12 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 locals {
-  stack_name                 = var.stack_name
-  checksum_exporter_schedule = coalesce(var.checksum_exporter_schedule, null)
-  enable_email_alerts        = var.alert_email_address != ""
-  lambda_architecture        = var.lambda_architecture
-  report_generator_schedule  = coalesce(var.report_generator_schedule, null)
+  stack_name                         = var.stack_name
+  checksum_exporter_schedule         = coalesce(var.checksum_exporter_schedule, null)
+  checksum_export_csv_report_storage = var.checksum_export_csv_report_storage
+  enable_email_alerts                = var.alert_email_address != ""
+  lambda_architecture                = var.lambda_architecture
+  report_generator_schedule          = coalesce(var.report_generator_schedule, null)
 
   # Conditional logic for external images
   bucket_requested_image_uri           = coalesce(var.bucket_requested_image_uri, null)

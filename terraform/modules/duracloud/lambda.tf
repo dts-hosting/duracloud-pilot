@@ -151,6 +151,10 @@ resource "aws_lambda_function" "checksum_export_csv_report_function" {
   memory_size   = 256
   description   = "DuraCloud function that writes CSV Reports of DynamoDB table exports"
 
+  ephemeral_storage {
+    size = local.checksum_export_csv_report_storage
+  }
+
   logging_config {
     log_format = "JSON"
     log_group  = aws_cloudwatch_log_group.checksum_export_csv_report_function.name

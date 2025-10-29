@@ -15,7 +15,7 @@ resource "aws_s3_bucket_notification" "managed_bucket_notification" {
     lambda_function_arn = aws_lambda_function.checksum_export_csv_report_function.arn
     events              = ["s3:ObjectCreated:*"]
     filter_prefix       = "exports/checksum-table/"
-    filter_suffix       = ".json.gz"
+    filter_suffix       = "manifest-files.json"
   }
 }
 
