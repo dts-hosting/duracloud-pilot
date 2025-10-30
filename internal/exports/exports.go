@@ -1,12 +1,25 @@
 package exports
 
 import (
+	"context"
+	"duracloud/internal/files"
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 const ManifestFile = "manifest-files.json"
+
+// This is an approx. overestimation of average csv row size (bytes)
+const RowSizeEstimate = 180
 
 var ExportHeaders = []string{
 	"BucketName",
@@ -17,10 +30,172 @@ var ExportHeaders = []string{
 	"LastChecksumMessage",
 }
 
-// ManifestEntry represents the fields in a DynamoDB manifest
-type ManifestEntry struct {
-	ItemCount     int    `json:"itemCount"`
-	DataFileS3Key string `json:"dataFileS3Key"`
+type csvOutput struct {
+	file   *os.File
+	writer *csv.Writer
+}
+
+// Exporter provides utilites for processing an export manifest
+type Exporter struct {
+	ctx           context.Context
+	s3Client      *s3.Client
+	manifest      files.S3Object
+	manifestFiles []string
+	outputFiles   map[string]*csvOutput
+	totalItems    int
+}
+
+func (e *Exporter) ProcessManifest() error {
+	manifest, err := files.DownloadObject(e.ctx, e.s3Client, e.manifest, false)
+	if err != nil {
+		return fmt.Errorf("failed to download manifest for %s: %w", e.manifest.Key, err)
+	}
+	defer func() { _ = manifest.Close() }()
+
+	_, err = ProcessExport(manifest, func(rec *ManifestEntry) error {
+		if rec.ItemCount > 0 {
+			e.manifestFiles = append(e.manifestFiles, rec.DataFileS3Key)
+		}
+		e.totalItems += rec.ItemCount
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to process manifest: %w", err)
+	}
+
+	log.Printf(
+		"Manifest processed: %s, Key: %s, Items: %d, EstimatedSize: %d",
+		e.manifest.Bucket, e.manifest.Key, e.totalItems, e.totalItems*RowSizeEstimate,
+	)
+
+	// Process each file, abort if any fail
+	err = e.processFiles()
+	if err != nil {
+		return err
+	}
+
+	// Cleanup before upload
+	for _, output := range e.outputFiles {
+		output.writer.Flush()
+		if err := output.writer.Error(); err != nil {
+			return fmt.Errorf("error flushing CSV writer: %w", err)
+		}
+		_ = output.file.Close()
+	}
+
+	// Upload each file, abort if any fail
+	err = e.uploadFiles()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *Exporter) processFiles() error {
+	for _, manifestFile := range e.manifestFiles {
+		log.Printf("Processing export: %s, Key: %s", e.manifest.Bucket, manifestFile)
+		mobj := files.NewS3Object(e.manifest.Bucket, manifestFile)
+
+		if err := e.processFile(mobj); err != nil {
+			for _, output := range e.outputFiles {
+				output.writer.Flush()
+				_ = output.file.Close()
+				_ = os.Remove(output.file.Name())
+			}
+			return fmt.Errorf("failed to process file %s: %w", manifestFile, err)
+		}
+	}
+	return nil
+}
+
+func (e *Exporter) processFile(obj files.S3Object) error {
+	file, err := files.DownloadObject(e.ctx, e.s3Client, obj, true)
+	if err != nil {
+		return fmt.Errorf("failed to download export data for %s: %w", obj.Key, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	_, err = ProcessExport(file, func(rec *ExportRecord) error {
+		// Use the bucket name from the record as the key
+		bucketName := rec.Item.BucketName.S
+		output, ok := e.outputFiles[bucketName]
+
+		if !ok {
+			// Create new temp file and writer for this bucket
+			csvFile, err := os.CreateTemp("", fmt.Sprintf("%s-*.csv", bucketName))
+			if err != nil {
+				return fmt.Errorf("failed to create temp CSV file: %w", err)
+			}
+
+			csvWriter := csv.NewWriter(csvFile)
+			if err := csvWriter.Write(ExportHeaders); err != nil {
+				_ = csvFile.Close()
+				_ = os.Remove(csvFile.Name())
+				return fmt.Errorf("failed to write CSV headers: %w", err)
+			}
+
+			output = &csvOutput{
+				file:   csvFile,
+				writer: csvWriter,
+			}
+			e.outputFiles[bucketName] = output
+		}
+
+		if err := output.writer.Write(rec.ToCSVRow()); err != nil {
+			return fmt.Errorf("failed to write CSV row: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error during processing of export file: %w", err)
+	}
+
+	return nil
+}
+
+func (e *Exporter) uploadFiles() error {
+	defer func() {
+		for _, output := range e.outputFiles {
+			_ = os.Remove(output.file.Name())
+		}
+	}()
+
+	date := time.Now().UTC().Format("2006-01-02")
+	for bucket, output := range e.outputFiles {
+		uploadFilename := filepath.Join("exports", "checksum-table", date, "CSV", fmt.Sprintf("%s.csv", bucket))
+		tempFilePath := output.file.Name()
+
+		uploadFile, err := os.Open(tempFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to reopen CSV file: %w", err)
+		}
+
+		log.Printf("Uploading CSV Report: %s, Key: %s", e.manifest.Bucket, uploadFilename)
+
+		uploadObj := files.NewS3Object(e.manifest.Bucket, uploadFilename)
+		err = files.UploadObject(e.ctx, e.s3Client, uploadObj, uploadFile, "text/csv")
+		_ = uploadFile.Close()
+
+		if err != nil {
+			return fmt.Errorf("failed to upload CSV for %s to %s: %w", bucket, uploadFilename, err)
+		}
+
+		log.Printf("Successfully wrote CSV Report to S3: %s, Key: %s", bucket, uploadFilename)
+	}
+
+	return nil
+}
+
+func NewExporter(ctx context.Context, s3Client *s3.Client, manifest files.S3Object) *Exporter {
+	return &Exporter{
+		ctx:         ctx,
+		s3Client:    s3Client,
+		manifest:    manifest,
+		outputFiles: make(map[string]*csvOutput),
+	}
 }
 
 // ExportItem represents the fields in a DynamoDB export record
@@ -48,6 +223,12 @@ func (r *ExportRecord) ToCSVRow() []string {
 		r.Item.LastChecksumDate.S,
 		r.Item.LastChecksumMessage.S,
 	}
+}
+
+// ManifestEntry represents the fields in a DynamoDB manifest
+type ManifestEntry struct {
+	ItemCount     int    `json:"itemCount"`
+	DataFileS3Key string `json:"dataFileS3Key"`
 }
 
 // S3Bucket represents the bucket part of an S3 event
