@@ -48,10 +48,13 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	log.Printf("Processing manifest: %s, Key: %s", obj.Bucket, obj.Key)
 
 	// Process the manifest and collect the files to process
-	err := inventory.ConcatenateInventoryFiles(ctx, s3Client, obj)
+	unwrapper := inventory.NewInventoryUnwrapper(ctx, s3Client, obj)
+	err := unwrapper.ConcatenateInventoryFiles()
 	if err != nil {
 		return fmt.Errorf("error generating consolidated inventory: %w", err)
 	}
+
+	log.Printf("Successfully processed manifest: %s, Key: %s", obj.Bucket, obj.Key)
 
 	return nil
 }

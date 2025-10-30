@@ -53,8 +53,9 @@ func (c *BucketCreationCoordinator) SubmitBucketCreationRequest(
 		triggerBucket := fmt.Sprintf("%s%s", request.StackName, buckets.BucketRequestedSuffix)
 		requestKey := fmt.Sprintf("test-request-%d.txt", time.Now().UnixNano()) // Use nanoseconds for uniqueness
 		obj := files.NewS3Object(triggerBucket, requestKey)
+		content := strings.NewReader(request.RequestContent)
 
-		err := files.UploadObject(ctx, s3Client, obj, strings.NewReader(request.RequestContent))
+		err := files.UploadObject(ctx, s3Client, obj, content, "text/plain")
 		if err != nil {
 			uploadComplete <- fmt.Errorf("failed to upload request file: %w", err)
 			return

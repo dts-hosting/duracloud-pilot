@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"duracloud/internal/buckets"
+	"duracloud/internal/files"
 	"fmt"
 	"html/template"
 	"log"
@@ -576,13 +577,8 @@ func (g *StorageReportGenerator) generateHTML(data ReportData, tmpl *template.Te
 
 func (g *StorageReportGenerator) UploadReport(ctx context.Context, bucketName, key, content string) error {
 	log.Printf("Uploading report to bucket: %s/%s\n", bucketName, key)
-
-	_, err := g.s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(key),
-		Body:        strings.NewReader(content),
-		ContentType: aws.String("text/html"),
-	})
+	obj := files.NewS3Object(bucketName, key)
+	err := files.UploadObject(ctx, g.s3Client, obj, strings.NewReader(content), "text/html")
 
 	return err
 }

@@ -122,7 +122,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		log.Printf("Uploading CSV Report: %s, Key: %s", obj.Bucket, uploadFilename)
 
 		uploadObj := files.NewS3Object(obj.Bucket, uploadFilename)
-		err = files.UploadObject(ctx, s3Client, uploadObj, uploadFile)
+		err = files.UploadObject(ctx, s3Client, uploadObj, uploadFile, "text/csv")
 		_ = uploadFile.Close()
 
 		if err != nil {

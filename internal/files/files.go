@@ -60,11 +60,12 @@ func TryObject(ctx context.Context, s3Client *s3.Client, obj S3Object) bool {
 
 // UploadObject with given reader for content
 // TODO: support content-type
-func UploadObject(ctx context.Context, s3Client *s3.Client, obj S3Object, content io.Reader) error {
+func UploadObject(ctx context.Context, s3Client *s3.Client, obj S3Object, content io.Reader, contentType string) error {
 	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(obj.Bucket),
-		Key:    aws.String(obj.Key),
-		Body:   content,
+		Bucket:      aws.String(obj.Bucket),
+		Key:         aws.String(obj.Key),
+		Body:        content,
+		ContentType: &contentType,
 	})
 	return err
 }

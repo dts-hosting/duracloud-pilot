@@ -524,13 +524,9 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 	now := time.Now().UTC()
 	timestamp := now.Format(time.RFC3339)
 	key := fmt.Sprintf("logs/bucket-request-log-%s.txt", timestamp)
+	obj := files.NewS3Object(bucketName, key)
 
-	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(key),
-		Body:        reader,
-		ContentType: aws.String("text/plain"),
-	})
+	err := files.UploadObject(ctx, s3Client, obj, reader, "text/plain")
 	if err != nil {
 		return ErrorBucketStatusUploadFailed(err)
 	}

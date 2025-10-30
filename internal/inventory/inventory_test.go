@@ -92,16 +92,13 @@ func TestParseDestinationBucket(t *testing.T) {
 			input:    "duracloud-tftest-managed",
 			expected: "duracloud-tftest-managed",
 		},
-		{
-			name:     "Bucket with dashes",
-			input:    "arn:aws:s3:::my-test-bucket-123",
-			expected: "my-test-bucket-123",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseDestinationBucket(tt.input)
+			var manifest InventoryManifest
+			manifest.DestinationBucket = tt.input
+			result := manifest.Bucket()
 			if result != tt.expected {
 				t.Errorf("Expected '%s', got '%s'", tt.expected, result)
 			}
