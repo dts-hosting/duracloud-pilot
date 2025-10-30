@@ -91,7 +91,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		}(requestedBucketName)
 	}
 
-	for i := 0; i < len(requestedBuckets); i++ {
+	for range len(requestedBuckets) {
 		results := <-resultChan
 		for bucket, status := range results {
 			log.Printf("Bucket status: %s %s\n", bucket, status)
@@ -103,6 +103,8 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	if err != nil {
 		return fmt.Errorf("could not write bucket status to managed bucket: %v", err)
 	}
+
+	log.Printf("Successfully processed event for bucket name: %s, object key: %s", bucketName, objectKey)
 
 	return nil
 }

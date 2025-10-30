@@ -240,7 +240,7 @@ func deleteBucketCompletely(ctx context.Context, s3Client *s3.Client, bucketName
 		}
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_, err := s3Client.DeleteBucket(ctx, &s3.DeleteBucketInput{
 			Bucket: aws.String(bucketName),
 		})
@@ -257,7 +257,7 @@ func deleteBucketCompletely(ctx context.Context, s3Client *s3.Client, bucketName
 func generateUniqueBucketNames(baseName string, count int, suffix string) []string {
 	var bucketsNames []string
 
-	for i := 0; i < count; i++ {
+	for range count {
 		uid := uuid.New().String()[:12]
 		bucketName := fmt.Sprintf("%s-%s%s", baseName, uid, suffix)
 		bucketsNames = append(bucketsNames, bucketName)
@@ -484,9 +484,9 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 	if isPublicBucket {
 		t.Run("PublicAccessBlock", func(t *testing.T) {
 			publicAccessBlock := getBucketPublicAccessBlock(ctx, s3Client, bucketName)
-			assert.NotNil(t, publicAccessBlock)
-			assert.NotEmpty(t, publicAccessBlock.PublicAccessBlockConfiguration)
-			assert.False(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy)
+			if assert.NotNil(t, publicAccessBlock) && assert.NotNil(t, publicAccessBlock.PublicAccessBlockConfiguration) {
+				assert.False(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy)
+			}
 		})
 
 		t.Run("PublicAccessPolicy", func(t *testing.T) {
@@ -495,18 +495,21 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 
 			var policyDoc map[string]interface{}
 			err := json.Unmarshal([]byte(*policy), &policyDoc)
-			assert.NoError(t, err)
-
-			statements := policyDoc["Statement"].([]interface{})
-			statement := statements[0].(map[string]interface{})
-			assert.Equal(t, "AllowPublicRead", statement["Sid"])
+			if assert.NoError(t, err) {
+				statements := policyDoc["Statement"].([]interface{})
+				if assert.NotEmpty(t, statements) {
+					statement := statements[0].(map[string]interface{})
+					assert.Equal(t, "AllowPublicRead", statement["Sid"])
+				}
+			}
 		})
 	} else {
 		t.Run("Lifecycle", func(t *testing.T) {
 			lifecycle := getBucketLifecycle(ctx, s3Client, bucketName)
 			assert.NotNil(t, lifecycle)
-			assert.NotEmpty(t, lifecycle.Rules)
-			assert.Equal(t, types.TransitionStorageClassGlacierIr, lifecycle.Rules[0].Transitions[0].StorageClass)
+			if assert.NotEmpty(t, lifecycle.Rules) && assert.NotEmpty(t, lifecycle.Rules[0].Transitions) {
+				assert.Equal(t, types.TransitionStorageClassGlacierIr, lifecycle.Rules[0].Transitions[0].StorageClass)
+			}
 		})
 	}
 
@@ -518,26 +521,27 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 
 	t.Run("Inventory", func(t *testing.T) {
 		inventory := getBucketInventory(ctx, s3Client, bucketName)
-		assert.NotEmpty(t, inventory)
-		assert.Equal(t, types.InventoryFrequencyDaily, inventory[0].Schedule.Frequency)
-		assert.Equal(
-			t,
-			fmt.Sprintf("arn:aws:s3:::%s%s", stackName, buckets.ManagedSuffix),
-			*inventory[0].Destination.S3BucketDestination.Bucket,
-		)
-		assert.Contains(t, *inventory[0].Destination.S3BucketDestination.Prefix, "inventory")
+		if assert.NotEmpty(t, inventory) {
+			assert.Equal(t, types.InventoryFrequencyDaily, inventory[0].Schedule.Frequency)
+			assert.Equal(
+				t,
+				fmt.Sprintf("arn:aws:s3:::%s%s", stackName, buckets.ManagedSuffix),
+				*inventory[0].Destination.S3BucketDestination.Bucket,
+			)
+			assert.Contains(t, *inventory[0].Destination.S3BucketDestination.Prefix, "inventory")
+		}
 	})
 
 	t.Run("Logging", func(t *testing.T) {
 		logging := getBucketLogging(ctx, s3Client, bucketName)
-		assert.NotNil(t, logging)
-		assert.NotEmpty(t, logging.LoggingEnabled)
-		assert.Equal(
-			t,
-			fmt.Sprintf("%s%s", stackName, buckets.ManagedSuffix),
-			*logging.LoggingEnabled.TargetBucket,
-		)
-		assert.Contains(t, *logging.LoggingEnabled.TargetPrefix, "audit")
+		if assert.NotNil(t, logging) && assert.NotNil(t, logging.LoggingEnabled) {
+			assert.Equal(
+				t,
+				fmt.Sprintf("%s%s", stackName, buckets.ManagedSuffix),
+				*logging.LoggingEnabled.TargetBucket,
+			)
+			assert.Contains(t, *logging.LoggingEnabled.TargetPrefix, "audit")
+		}
 	})
 
 	t.Run("Replication", func(t *testing.T) {

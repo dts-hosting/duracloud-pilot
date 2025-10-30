@@ -216,12 +216,9 @@ func (g *StorageReportGenerator) processBuckets(
 	}
 	close(bucketQueue)
 
-	numWorkers := MaxConcurrentWorkers
-	if len(buckets) < numWorkers {
-		numWorkers = len(buckets)
-	}
+	numWorkers := min(MaxConcurrentWorkers, len(buckets))
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -431,12 +428,9 @@ func (g *StorageReportGenerator) processPrefixes(
 	}
 	close(prefixQueue)
 
-	numWorkers := PrefixWorkerPoolSize
-	if len(prefixes) < numWorkers {
-		numWorkers = len(prefixes)
-	}
+	numWorkers := min(PrefixWorkerPoolSize, len(prefixes))
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
