@@ -128,8 +128,9 @@ func TestDatabaseOperations(t *testing.T) {
 	clients, stackName := setupTestClients(t)
 	ctx := context.Background()
 
-	checksumTableName := fmt.Sprintf("%s-checksum-table", stackName)
-	schedulerTableName := fmt.Sprintf("%s-checksum-scheduler-table", stackName)
+	checksumTable := fmt.Sprintf("%s-checksum-table", stackName)
+	schedulerTable := fmt.Sprintf("%s-checksum-scheduler-table", stackName)
+	ddb := db.NewDB(ctx, clients.DynamoDB, checksumTable, schedulerTable)
 
 	t.Run("ChecksumRecordCRUD", func(t *testing.T) {
 		obj := files.NewS3Object("test-bucket", "test-object.txt")
@@ -145,11 +146,11 @@ func TestDatabaseOperations(t *testing.T) {
 			NextChecksumDate:    time.Now().Add(24 * time.Hour),
 		}
 
-		err := db.PutChecksumRecord(ctx, clients.DynamoDB, checksumTableName, record)
+		err := ddb.Put(record)
 		require.NoError(t, err, "Should create checksum record")
 
 		// Test record retrieval
-		retrievedRecord, err := db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTableName, obj)
+		retrievedRecord, err := ddb.Get(obj)
 		require.NoError(t, err, "Should retrieve checksum record")
 
 		assert.Equal(t, record.BucketName, retrievedRecord.BucketName)
@@ -163,20 +164,20 @@ func TestDatabaseOperations(t *testing.T) {
 		updatedRecord.LastChecksumMessage = "updated message"
 		updatedRecord.LastChecksumSuccess = false
 
-		err = db.PutChecksumRecord(ctx, clients.DynamoDB, checksumTableName, updatedRecord)
+		err = ddb.Put(updatedRecord)
 		require.NoError(t, err, "Should update checksum record")
 
-		finalRecord, err := db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTableName, obj)
+		finalRecord, err := ddb.Get(obj)
 		require.NoError(t, err, "Should retrieve updated record")
 
 		assert.Equal(t, "updated message", finalRecord.LastChecksumMessage)
 		assert.False(t, finalRecord.LastChecksumSuccess)
 
 		// Test record deletion
-		err = db.DeleteChecksumRecord(ctx, clients.DynamoDB, checksumTableName, obj)
+		err = ddb.Delete(obj)
 		require.NoError(t, err, "Should delete checksum record")
 
-		_, err = db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTableName, obj)
+		_, err = ddb.Get(obj)
 		assert.Error(t, err, "Should not find deleted record")
 	})
 
@@ -187,7 +188,7 @@ func TestDatabaseOperations(t *testing.T) {
 			NextChecksumDate: time.Now().Add(1 * time.Hour),
 		}
 
-		err := db.ScheduleNextVerification(ctx, clients.DynamoDB, schedulerTableName, record)
+		err := ddb.Schedule(record)
 		require.NoError(t, err, "Should schedule verification")
 
 		t.Logf("Successfully scheduled verification for %s/%s", record.BucketName, record.ObjectKey)

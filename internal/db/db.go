@@ -34,13 +34,33 @@ type ChecksumRecord struct {
 	NextChecksumDate    time.Time `dynamodbav:"NextChecksumDate"`
 }
 
-func DeleteChecksumRecord(
-	ctx context.Context,
-	client *dynamodb.Client,
-	table string,
-	obj files.S3Object,
-) error {
-	_, err := client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+type DB struct {
+	ctx            context.Context
+	client         *dynamodb.Client
+	checksumTable  string
+	schedulerTable string
+}
+
+func NewDB(ctx context.Context, client *dynamodb.Client, checksumTable, schedulerTable string) *DB {
+	return &DB{
+		ctx:            ctx,
+		client:         client,
+		checksumTable:  checksumTable,
+		schedulerTable: schedulerTable,
+	}
+}
+
+func (d *DB) Delete(obj files.S3Object) error {
+	err := d.delete(d.checksumTable, obj)
+	if err != nil {
+		return err
+	}
+
+	return d.delete(d.schedulerTable, obj)
+}
+
+func (d *DB) delete(table string, obj files.S3Object) error {
+	_, err := d.client.DeleteItem(d.ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(table),
 		Key: map[string]types.AttributeValue{
 			"BucketName": &types.AttributeValueMemberS{Value: obj.Bucket},
@@ -50,14 +70,13 @@ func DeleteChecksumRecord(
 	return err
 }
 
-func GetChecksumRecord(
-	ctx context.Context,
-	client *dynamodb.Client,
-	checksumTable string,
-	obj files.S3Object,
-) (ChecksumRecord, error) {
-	result, err := client.GetItem(ctx, &dynamodb.GetItemInput{
-		TableName: aws.String(checksumTable),
+func (d *DB) Get(obj files.S3Object) (ChecksumRecord, error) {
+	return d.get(d.checksumTable, obj)
+}
+
+func (d *DB) get(table string, obj files.S3Object) (ChecksumRecord, error) {
+	result, err := d.client.GetItem(d.ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(table),
 		Key: map[string]types.AttributeValue{
 			"BucketName": &types.AttributeValueMemberS{Value: obj.Bucket},
 			"ObjectKey":  &types.AttributeValueMemberS{Value: obj.Key},
@@ -78,6 +97,39 @@ func GetChecksumRecord(
 	}
 
 	return checksumRecord, nil
+}
+
+func (d *DB) Next(obj files.S3Object) (ChecksumRecord, error) {
+	return d.get(d.schedulerTable, obj)
+}
+
+func (d *DB) Put(record ChecksumRecord) error {
+	_, err := d.client.PutItem(d.ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(d.checksumTable),
+		Item: map[string]types.AttributeValue{
+			"BucketName":          &types.AttributeValueMemberS{Value: record.BucketName},
+			"ObjectKey":           &types.AttributeValueMemberS{Value: record.ObjectKey},
+			"Checksum":            &types.AttributeValueMemberS{Value: record.Checksum},
+			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate.Format(time.RFC3339)},
+			"LastChecksumMessage": &types.AttributeValueMemberS{Value: record.LastChecksumMessage},
+			"LastChecksumSuccess": &types.AttributeValueMemberBOOL{Value: record.LastChecksumSuccess},
+			"NextChecksumDate":    &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
+		},
+	})
+	return err
+}
+
+func (d *DB) Schedule(record ChecksumRecord) error {
+	_, err := d.client.PutItem(d.ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(d.schedulerTable),
+		Item: map[string]types.AttributeValue{
+			"BucketName":       &types.AttributeValueMemberS{Value: record.BucketName},
+			"ObjectKey":        &types.AttributeValueMemberS{Value: record.ObjectKey},
+			"NextChecksumDate": &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
+			"TTL":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", record.NextChecksumDate.Unix())},
+		},
+	})
+	return err
 }
 
 func GetNextScheduledTime() (time.Time, error) {
@@ -104,43 +156,4 @@ func GetNextScheduledTime() (time.Time, error) {
 		Add(time.Duration(jitterMinutes.Int64()) * time.Minute)
 
 	return scheduledTime, nil
-}
-
-func PutChecksumRecord(
-	ctx context.Context,
-	client *dynamodb.Client,
-	checksumTable string,
-	record ChecksumRecord,
-) error {
-	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(checksumTable),
-		Item: map[string]types.AttributeValue{
-			"BucketName":          &types.AttributeValueMemberS{Value: record.BucketName},
-			"ObjectKey":           &types.AttributeValueMemberS{Value: record.ObjectKey},
-			"Checksum":            &types.AttributeValueMemberS{Value: record.Checksum},
-			"LastChecksumDate":    &types.AttributeValueMemberS{Value: record.LastChecksumDate.Format(time.RFC3339)},
-			"LastChecksumMessage": &types.AttributeValueMemberS{Value: record.LastChecksumMessage},
-			"LastChecksumSuccess": &types.AttributeValueMemberBOOL{Value: record.LastChecksumSuccess},
-			"NextChecksumDate":    &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
-		},
-	})
-	return err
-}
-
-func ScheduleNextVerification(
-	ctx context.Context,
-	client *dynamodb.Client,
-	schedulerTable string,
-	record ChecksumRecord,
-) error {
-	_, err := client.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(schedulerTable),
-		Item: map[string]types.AttributeValue{
-			"BucketName":       &types.AttributeValueMemberS{Value: record.BucketName},
-			"ObjectKey":        &types.AttributeValueMemberS{Value: record.ObjectKey},
-			"NextChecksumDate": &types.AttributeValueMemberS{Value: record.NextChecksumDate.Format(time.RFC3339)},
-			"TTL":              &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", record.NextChecksumDate.Unix())},
-		},
-	})
-	return err
 }

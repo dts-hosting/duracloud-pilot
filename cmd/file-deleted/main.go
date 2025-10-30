@@ -54,6 +54,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	}
 
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
+	ddb := db.NewDB(ctx, dynamodbClient, checksumTable, schedulerTable)
 
 	for _, parsedEvent := range parsedEvents {
 		if parsedEvent.BucketPrefix() != bucketPrefix {
@@ -69,8 +70,8 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		obj := files.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
 		log.Printf("Processing delete event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
-		if err := processDeletedObject(ctx, dynamodbClient, obj); err != nil {
-			_, checkErr := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
+		if err := ddb.Delete(obj); err != nil {
+			_, checkErr := ddb.Get(obj)
 			if checkErr == nil {
 				// Record exists, so we should retry processing
 				failedEvents = append(failedEvents, events.SQSBatchItemFailure{
@@ -85,20 +86,6 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	return events.SQSEventResponse{
 		BatchItemFailures: failedEvents,
 	}, nil
-}
-
-func processDeletedObject(ctx context.Context, dynamodbClient *dynamodb.Client, obj files.S3Object) error {
-	err := db.DeleteChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
-	if err != nil {
-		return err
-	}
-
-	err = db.DeleteChecksumRecord(ctx, dynamodbClient, schedulerTable, obj)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func main() {

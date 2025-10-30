@@ -21,6 +21,7 @@ func TestFileDeletedWorkflow(t *testing.T) {
 	// Table names
 	checksumTable := fmt.Sprintf("%s-checksum-table", stackName)
 	schedulerTable := fmt.Sprintf("%s-checksum-scheduler-table", stackName)
+	ddb := db.NewDB(ctx, clients.DynamoDB, checksumTable, schedulerTable)
 
 	// Create test object
 	testBucket := fmt.Sprintf("%s-test", stackName)
@@ -39,18 +40,18 @@ func TestFileDeletedWorkflow(t *testing.T) {
 	}
 
 	// Insert record into checksum table
-	err := db.PutChecksumRecord(ctx, clients.DynamoDB, checksumTable, record)
+	err := ddb.Put(record)
 	require.NoError(t, err, "Failed to create test checksum record")
 
 	// Insert record into scheduler table
-	err = db.ScheduleNextVerification(ctx, clients.DynamoDB, schedulerTable, record)
+	err = ddb.Schedule(record)
 	require.NoError(t, err, "Failed to create test scheduler record")
 
 	// Verify records exist before deletion
-	_, err = db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTable, obj)
+	_, err = ddb.Get(obj)
 	assert.NoError(t, err, "Checksum record should exist before deletion")
 
-	_, err = db.GetChecksumRecord(ctx, clients.DynamoDB, schedulerTable, obj)
+	_, err = ddb.Next(obj)
 	assert.NoError(t, err, "Scheduler record should exist before deletion")
 
 	// Simulate file deletion by invoking the file-deleted lambda
@@ -75,14 +76,14 @@ func TestFileDeletedWorkflow(t *testing.T) {
 
 	// Verify checksum record is deleted
 	success := WaitForCondition(t, "checksum record deletion", func() bool {
-		_, err := db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTable, obj)
+		_, err := ddb.Get(obj)
 		return err != nil // Record should not exist (error expected)
 	}, waitConfig)
 	assert.True(t, success, "Checksum record should be deleted")
 
 	// Verify scheduler record is deleted
 	success = WaitForCondition(t, "scheduler record deletion", func() bool {
-		_, err := db.GetChecksumRecord(ctx, clients.DynamoDB, schedulerTable, obj)
+		_, err := ddb.Next(obj)
 		return err != nil // Record should not exist (error expected)
 	}, waitConfig)
 	assert.True(t, success, "Scheduler record should be deleted")

@@ -20,6 +20,9 @@ func TestChecksumFailureWorkflow(t *testing.T) {
 
 	// Table names
 	checksumTable := fmt.Sprintf("%s-checksum-table", stackName)
+	schedulerTable := fmt.Sprintf("%s-checksum-scheduler-table", stackName)
+
+	ddb := db.NewDB(ctx, clients.DynamoDB, checksumTable, schedulerTable)
 
 	// Create test object
 	testBucket := fmt.Sprintf("%s-test", stackName)
@@ -38,7 +41,7 @@ func TestChecksumFailureWorkflow(t *testing.T) {
 	}
 
 	// Insert initial record
-	err := db.PutChecksumRecord(ctx, clients.DynamoDB, checksumTable, record)
+	err := ddb.Put(record)
 	require.NoError(t, err, "Failed to create initial checksum record")
 
 	// TODO: may need to reconsider how this is being done to make it more precise
@@ -52,7 +55,7 @@ func TestChecksumFailureWorkflow(t *testing.T) {
 	failedRecord.LastChecksumMessage = "checksum mismatch: expected test-checksum, got different-checksum"
 	failedRecord.LastChecksumSuccess = false // This change triggers the failure workflow
 
-	err = db.PutChecksumRecord(ctx, clients.DynamoDB, checksumTable, failedRecord)
+	err = ddb.Put(failedRecord)
 	require.NoError(t, err, "Failed to update checksum record to trigger failure")
 
 	// Wait for failure workflow to process the change and CloudWatch metrics to be available
@@ -81,7 +84,7 @@ func TestChecksumFailureWorkflow(t *testing.T) {
 	}
 
 	// Verify the record still exists with failure status
-	updatedRecord, err := db.GetChecksumRecord(ctx, clients.DynamoDB, checksumTable, obj)
+	updatedRecord, err := ddb.Get(obj)
 	require.NoError(t, err, "Should be able to retrieve updated record")
 	assert.False(t, updatedRecord.LastChecksumSuccess, "Record should show failure status")
 	assert.Contains(t, updatedRecord.LastChecksumMessage, "checksum mismatch",

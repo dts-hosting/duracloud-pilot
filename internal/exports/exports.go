@@ -47,6 +47,15 @@ type Exporter struct {
 	totalItems    int
 }
 
+func NewExporter(ctx context.Context, s3Client *s3.Client, manifest files.S3Object) *Exporter {
+	return &Exporter{
+		ctx:         ctx,
+		s3Client:    s3Client,
+		manifest:    manifest,
+		outputFiles: make(map[string]*csvOutput),
+	}
+}
+
 func (e *Exporter) ProcessManifest() error {
 	manifest, err := files.DownloadObject(e.ctx, e.s3Client, e.manifest, false)
 	if err != nil {
@@ -189,15 +198,6 @@ func (e *Exporter) uploadFiles() error {
 	}
 
 	return nil
-}
-
-func NewExporter(ctx context.Context, s3Client *s3.Client, manifest files.S3Object) *Exporter {
-	return &Exporter{
-		ctx:         ctx,
-		s3Client:    s3Client,
-		manifest:    manifest,
-		outputFiles: make(map[string]*csvOutput),
-	}
 }
 
 // ExportItem represents the fields in a DynamoDB export record

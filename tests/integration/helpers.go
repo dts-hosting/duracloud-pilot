@@ -98,14 +98,14 @@ func WaitForCondition(t *testing.T, description string, condition func() bool, c
 }
 
 // WaitForDynamoDBRecord waits for a DynamoDB record to exist and optionally match conditions
-func WaitForDynamoDBRecord(t *testing.T, clients *TestClients, tableName string, obj *files.S3Object,
+func WaitForDynamoDBRecord(t *testing.T, ddb *db.DB, obj *files.S3Object,
 	validator func(record db.ChecksumRecord) bool, config WaitConfig) (db.ChecksumRecord, bool) {
 
 	var lastRecord db.ChecksumRecord
 	var lastErr error
 
 	condition := func() bool {
-		record, err := db.GetChecksumRecord(context.Background(), clients.DynamoDB, tableName, *obj)
+		record, err := ddb.Get(*obj)
 		lastErr = err
 		if err != nil {
 			t.Logf("Record not found yet for %s/%s: %v", obj.Bucket, obj.Key, err)
