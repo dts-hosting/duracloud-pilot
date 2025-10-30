@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -263,6 +265,21 @@ func (e *S3Event) BucketName() string {
 
 func (e *S3Event) ObjectKey() string {
 	return e.Records[0].S3.Object.Key
+}
+
+// ExportTable triggers a DynamoDB table export to S3
+func ExportTable(ctx context.Context, client *dynamodb.Client, tableArn string, obj files.S3Object) (string, error) {
+	result, err := client.ExportTableToPointInTime(ctx, &dynamodb.ExportTableToPointInTimeInput{
+		TableArn:     aws.String(tableArn),
+		S3Bucket:     aws.String(obj.Bucket),
+		S3Prefix:     aws.String(obj.Key),
+		ExportFormat: "DYNAMODB_JSON",
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return *result.ExportDescription.ExportArn, nil
 }
 
 // ProcessExport processes JSON export data, calling callback for each record

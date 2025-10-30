@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"duracloud/internal/exports"
+	"duracloud/internal/files"
 	"fmt"
 	"os"
 	"time"
@@ -47,8 +49,9 @@ func handler(ctx context.Context) (ExportResponse, error) {
 	tableArn := *tableResult.Table.TableArn
 	timestamp := time.Now().Format("2006-01-02")
 	prefix := fmt.Sprintf("exports/checksum-table/%s/", timestamp)
+	obj := files.NewS3Object(exportBucket, prefix)
 
-	exportArn, err := exportTable(ctx, dynamodbClient, tableArn, exportBucket, prefix)
+	exportArn, err := exports.ExportTable(ctx, dynamodbClient, tableArn, obj)
 	if err != nil {
 		return ExportResponse{}, fmt.Errorf("failed to export checksum table: %v", err)
 	}
@@ -61,20 +64,6 @@ func handler(ctx context.Context) (ExportResponse, error) {
 		Bucket:    exportBucket,
 		Prefix:    prefix,
 	}, nil
-}
-
-func exportTable(ctx context.Context, client *dynamodb.Client, tableArn, bucket, prefix string) (string, error) {
-	result, err := client.ExportTableToPointInTime(ctx, &dynamodb.ExportTableToPointInTimeInput{
-		TableArn:     aws.String(tableArn),
-		S3Bucket:     aws.String(bucket),
-		S3Prefix:     aws.String(prefix),
-		ExportFormat: "DYNAMODB_JSON",
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return *result.ExportDescription.ExportArn, nil
 }
 
 func main() {
