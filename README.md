@@ -1,7 +1,7 @@
 # DuraCloud (pilot)
 
 DuraCloud is a set of serverless components built using AWS services centered
-around digital preservation uses cases. It provides configuration and features
+around digital preservation use cases. It provides configuration and features
 on top of AWS S3 to support long term access to and preservation of files.
 
 ## Documentation
