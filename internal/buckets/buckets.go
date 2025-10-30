@@ -93,9 +93,9 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 
 func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	// apply a default deny-upload policy
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Sid":       "DenyAllUploads",
 				"Effect":    "Deny",
@@ -171,9 +171,9 @@ func AddLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string, s
 }
 
 func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Sid":       "AllowPublicRead",
 				"Effect":    "Allow",

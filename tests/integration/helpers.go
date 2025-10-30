@@ -5,10 +5,8 @@ import (
 	"duracloud/internal/buckets"
 	"duracloud/internal/db"
 	"duracloud/internal/files"
-	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -83,10 +81,7 @@ func WaitForCondition(t *testing.T, description string, condition func() bool, c
 
 		// Apply exponential backoff
 		if config.BackoffFactor > 1.0 {
-			pollInterval = time.Duration(float64(pollInterval) * config.BackoffFactor)
-			if pollInterval > config.MaxPollInterval {
-				pollInterval = config.MaxPollInterval
-			}
+			pollInterval = min(time.Duration(float64(pollInterval)*config.BackoffFactor), config.MaxPollInterval)
 		}
 
 		attempt++
@@ -421,22 +416,6 @@ func lambdaFunctionInvoke(ctx context.Context, lambdaClient *lambda.Client, func
 	return result, err
 }
 
-func setupBucketTest(t *testing.T, bucketCount int, suffix string) (*TestClients, string, []string, context.Context) {
-	clients, stackName := setupTestClients(t)
-	ctx := context.Background()
-
-	testBuckets := generateUniqueBucketNames("test", bucketCount, suffix)
-	t.Logf("Using test buckets: %v", testBuckets)
-
-	// Cleanup when tests finish
-	t.Cleanup(func() {
-		t.Logf("Cleaning up test buckets: %v", testBuckets)
-		cleanupTestBuckets(ctx, clients.S3, stackName, testBuckets)
-	})
-
-	return clients, stackName, testBuckets, ctx
-}
-
 func setupTestClients(t *testing.T) (*TestClients, string) {
 	ctx := context.Background()
 
@@ -471,111 +450,4 @@ func uploadRequestAndWait(t *testing.T, ctx context.Context, s3Client *s3.Client
 	} else {
 		t.Logf("Bucket coordination completed successfully")
 	}
-}
-
-func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, bucketName, stackName string) {
-	isPublicBucket := strings.HasSuffix(bucketName, buckets.PublicSuffix)
-
-	t.Run("Versioning", func(t *testing.T) {
-		versioning := getBucketVersioning(ctx, s3Client, bucketName)
-		assert.Equal(t, "Enabled", versioning)
-	})
-
-	if isPublicBucket {
-		t.Run("PublicAccessBlock", func(t *testing.T) {
-			publicAccessBlock := getBucketPublicAccessBlock(ctx, s3Client, bucketName)
-			if assert.NotNil(t, publicAccessBlock) && assert.NotNil(t, publicAccessBlock.PublicAccessBlockConfiguration) {
-				assert.False(t, *publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy)
-			}
-		})
-
-		t.Run("PublicAccessPolicy", func(t *testing.T) {
-			policy := getBucketPolicy(ctx, s3Client, bucketName)
-			assert.NotNil(t, policy)
-
-			var policyDoc map[string]interface{}
-			err := json.Unmarshal([]byte(*policy), &policyDoc)
-			if assert.NoError(t, err) {
-				statements := policyDoc["Statement"].([]interface{})
-				if assert.NotEmpty(t, statements) {
-					statement := statements[0].(map[string]interface{})
-					assert.Equal(t, "AllowPublicRead", statement["Sid"])
-				}
-			}
-		})
-	} else {
-		t.Run("Lifecycle", func(t *testing.T) {
-			lifecycle := getBucketLifecycle(ctx, s3Client, bucketName)
-			assert.NotNil(t, lifecycle)
-			if assert.NotEmpty(t, lifecycle.Rules) && assert.NotEmpty(t, lifecycle.Rules[0].Transitions) {
-				assert.Equal(t, types.TransitionStorageClassGlacierIr, lifecycle.Rules[0].Transitions[0].StorageClass)
-			}
-		})
-	}
-
-	t.Run("Notifications", func(t *testing.T) {
-		notifications := getBucketNotifications(ctx, s3Client, bucketName)
-		assert.NotNil(t, notifications)
-		assert.NotNil(t, notifications.EventBridgeConfiguration)
-	})
-
-	t.Run("Inventory", func(t *testing.T) {
-		inventory := getBucketInventory(ctx, s3Client, bucketName)
-		if assert.NotEmpty(t, inventory) {
-			assert.Equal(t, types.InventoryFrequencyDaily, inventory[0].Schedule.Frequency)
-			assert.Equal(
-				t,
-				fmt.Sprintf("arn:aws:s3:::%s%s", stackName, buckets.ManagedSuffix),
-				*inventory[0].Destination.S3BucketDestination.Bucket,
-			)
-			assert.Contains(t, *inventory[0].Destination.S3BucketDestination.Prefix, "inventory")
-		}
-	})
-
-	t.Run("Logging", func(t *testing.T) {
-		logging := getBucketLogging(ctx, s3Client, bucketName)
-		if assert.NotNil(t, logging) && assert.NotNil(t, logging.LoggingEnabled) {
-			assert.Equal(
-				t,
-				fmt.Sprintf("%s%s", stackName, buckets.ManagedSuffix),
-				*logging.LoggingEnabled.TargetBucket,
-			)
-			assert.Contains(t, *logging.LoggingEnabled.TargetPrefix, "audit")
-		}
-	})
-
-	t.Run("Replication", func(t *testing.T) {
-		replication := getBucketReplication(ctx, s3Client, bucketName)
-		assert.NotNil(t, replication)
-		if replication != nil && replication.ReplicationConfiguration != nil {
-			assert.NotEmpty(t, replication.ReplicationConfiguration.Rules)
-			if len(replication.ReplicationConfiguration.Rules) > 0 {
-				assert.Equal(t, types.ReplicationRuleStatusEnabled, replication.ReplicationConfiguration.Rules[0].Status)
-				assert.Equal(
-					t,
-					fmt.Sprintf("arn:aws:s3:::%s%s", bucketName, buckets.ReplicationSuffix),
-					*replication.ReplicationConfiguration.Rules[0].Destination.Bucket,
-				)
-			}
-		}
-	})
-
-	t.Run("Tags", func(t *testing.T) {
-		tags := getBucketTags(ctx, s3Client, bucketName)
-		assert.NotEmpty(t, tags)
-
-		var foundStack, foundType bool
-		for _, tag := range tags {
-			if tag.Key != nil && tag.Value != nil {
-				if *tag.Key == "BucketType" {
-					foundType = true
-				}
-				if *tag.Key == "StackName" && *tag.Value == stackName {
-					foundStack = true
-				}
-			}
-		}
-		assert.True(t, foundType, "Should have BucketType tag")
-		assert.True(t, foundStack, "Should have StackName tag")
-	})
 }

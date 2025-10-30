@@ -154,18 +154,18 @@ func hasCorrectPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName
 		return false
 	}
 
-	var policyDoc map[string]interface{}
+	var policyDoc map[string]any
 	err := json.Unmarshal([]byte(*policy), &policyDoc)
 	if err != nil {
 		return false
 	}
 
-	statements, ok := policyDoc["Statement"].([]interface{})
+	statements, ok := policyDoc["Statement"].([]any)
 	if !ok || len(statements) == 0 {
 		return false
 	}
 
-	statement, ok := statements[0].(map[string]interface{})
+	statement, ok := statements[0].(map[string]any)
 	if !ok {
 		return false
 	}
