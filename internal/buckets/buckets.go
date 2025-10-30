@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"context"
 	"duracloud/internal/accounts"
+	"duracloud/internal/files"
 	"encoding/json"
 	"fmt"
-	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -380,19 +380,14 @@ func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
 func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string, limit int) ([]string, error) {
 	var buckets []string
 
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
+	resp, err := files.DownloadObject(ctx, s3Client, files.NewS3Object(bucket, key), false)
 
 	if err != nil {
 		return nil, ErrorRetrievingObject(key, bucket, err)
 	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
+	defer func() { _ = resp.Close() }()
 
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(resp)
 
 	for scanner.Scan() {
 		line := strings.ToLower(scanner.Text())

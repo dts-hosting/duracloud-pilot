@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -53,19 +53,18 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		return fmt.Errorf("no S3 records in event")
 	}
 
-	bucketName := s3Event.BucketName()
-	objectKey := s3Event.ObjectKey()
+	obj := files.NewS3Object(s3Event.BucketName(), s3Event.ObjectKey())
 
-	if !strings.HasSuffix(objectKey, exports.ManifestFile) {
-		return fmt.Errorf("invalid manifest file: %s", objectKey)
+	if !strings.HasSuffix(obj.Key, exports.ManifestFile) {
+		return fmt.Errorf("invalid manifest file: %s", obj.Key)
 	}
 
-	log.Printf("Processing manifest: %s, Key: %s", bucketName, objectKey)
+	log.Printf("Processing manifest: %s, Key: %s", obj.Bucket, obj.Key)
 
 	// Process the manifest and collect the files to process
-	manifest, err := files.DownloadObject(ctx, s3Client, bucketName, objectKey, false)
+	manifest, err := files.DownloadObject(ctx, s3Client, obj, false)
 	if err != nil {
-		return fmt.Errorf("failed to download manifest for %s: %w", objectKey, err)
+		return fmt.Errorf("failed to download manifest for %s: %w", obj.Key, err)
 	}
 	defer func() { _ = manifest.Close() }()
 
@@ -82,14 +81,15 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	log.Printf(
 		"Manifest processed: %s, Key: %s, Items: %d, EstimatedSize: %d",
-		bucketName, objectKey, totalItems, totalItems*ROW_SIZE_ESTIMATE,
+		obj.Bucket, obj.Key, totalItems, totalItems*ROW_SIZE_ESTIMATE,
 	)
 
 	// Process each file
 	for _, manifestFile := range manifestFiles {
-		log.Printf("Processing export: %s, Key: %s", bucketName, manifestFile)
+		log.Printf("Processing export: %s, Key: %s", obj.Bucket, manifestFile)
+		mobj := files.NewS3Object(obj.Bucket, manifestFile)
 
-		if err := processFile(ctx, bucketName, manifestFile, outputFiles); err != nil {
+		if err := processFile(ctx, mobj, outputFiles); err != nil {
 			for _, output := range outputFiles {
 				output.writer.Flush()
 				_ = output.file.Close()
@@ -111,7 +111,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	// Now upload the CSV report files
 	date := time.Now().UTC().Format("2006-01-02")
 	for bucket, output := range outputFiles {
-		uploadFilename := fmt.Sprintf("exports/checksum-table/%s/CSV/%s.csv", date, bucket)
+		uploadFilename := filepath.Join("exports", "checksum-table", date, "CSV", fmt.Sprintf("%s.csv", bucket))
 		tempFilePath := output.file.Name()
 
 		uploadFile, err := os.Open(tempFilePath)
@@ -119,15 +119,10 @@ func handler(ctx context.Context, event json.RawMessage) error {
 			return fmt.Errorf("failed to reopen CSV file: %w", err)
 		}
 
-		log.Printf("Uploading CSV Report: %s, Key: %s", bucketName, uploadFilename)
+		log.Printf("Uploading CSV Report: %s, Key: %s", obj.Bucket, uploadFilename)
 
-		input := &s3.PutObjectInput{
-			Bucket: aws.String(bucketName),
-			Key:    aws.String(uploadFilename),
-			Body:   uploadFile,
-		}
-
-		_, err = s3Client.PutObject(ctx, input)
+		uploadObj := files.NewS3Object(obj.Bucket, uploadFilename)
+		err = files.UploadObject(ctx, s3Client, uploadObj, uploadFile)
 		_ = uploadFile.Close()
 
 		if err != nil {
@@ -138,7 +133,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		log.Printf("Successfully wrote CSV Report to S3: %s, Key: %s", bucket, uploadFilename)
 	}
 
-	log.Printf("Successfully processed manifest: %s, Key: %s", bucketName, objectKey)
+	log.Printf("Successfully processed manifest: %s, Key: %s", obj.Bucket, obj.Key)
 
 	return nil
 }
@@ -147,10 +142,10 @@ func main() {
 	lambda.Start(handler)
 }
 
-func processFile(ctx context.Context, bucket string, object string, out map[string]*csvOutput) error {
-	file, err := files.DownloadObject(ctx, s3Client, bucket, object, true)
+func processFile(ctx context.Context, obj files.S3Object, out map[string]*csvOutput) error {
+	file, err := files.DownloadObject(ctx, s3Client, obj, true)
 	if err != nil {
-		return fmt.Errorf("failed to download export data for %s: %w", object, err)
+		return fmt.Errorf("failed to download export data for %s: %w", obj.Key, err)
 	}
 	defer func() { _ = file.Close() }()
 
