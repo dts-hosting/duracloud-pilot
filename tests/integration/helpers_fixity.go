@@ -71,8 +71,9 @@ func (h *FixityTestHelper) CreateTestBucket(t *testing.T, suffix string) string 
 	err := h.createBucket(t, bucketRequest)
 	require.NoError(t, err, "Should create bucket directly for fixity testing")
 
-	t.Logf("Created test bucket directly: %s", bucketName)
-	return bucketName
+	fullBucketName := bucketRequest.FullName()
+	t.Logf("Created test bucket directly: %s", fullBucketName)
+	return fullBucketName
 }
 
 // InvokeVerificationFunction directly invokes the checksum verification Lambda function
