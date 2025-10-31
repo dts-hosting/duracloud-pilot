@@ -377,13 +377,13 @@ func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
 }
 
 // GetBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
-func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string, limit int) ([]string, error) {
+func GetBuckets(ctx context.Context, s3Client *s3.Client, obj files.S3Object, limit int) ([]string, error) {
 	var buckets []string
 
-	resp, err := files.DownloadObject(ctx, s3Client, files.NewS3Object(bucket, key), false)
+	resp, err := files.DownloadObject(ctx, s3Client, obj, false)
 
 	if err != nil {
-		return nil, ErrorRetrievingObject(key, bucket, err)
+		return nil, ErrorRetrievingObject(obj.Key, obj.Bucket, err)
 	}
 	defer func() { _ = resp.Close() }()
 
