@@ -5,7 +5,6 @@ import (
 	"duracloud/internal/accounts"
 	"duracloud/internal/checksum"
 	"duracloud/internal/db"
-	"duracloud/internal/files"
 	"duracloud/internal/notifications"
 	_ "embed"
 	"fmt"
@@ -73,21 +72,21 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 	ddb := db.NewDB(ctx, dynamodbClient, checksumTable, schedulerTable)
 
 	for _, record := range event.Records {
-		if !isTTLExpiry(record) {
+		if !db.IsTTLExpiry(record) {
 			continue
 		}
 
-		obj, err := extractBucketAndObject(record)
+		obj, err := db.ExtractBucketAndObject(record)
 		if err != nil {
-			log.Printf("failed to extract bucket/object: %s", err.Error())
+			log.Printf("Failed to extract bucket/object: %s", err.Error())
 			continue
 		}
 
-		err = processChecksumVerification(ctx, ddb, s3Client, obj)
+		verifier := checksum.NewVerifier(ctx, ddb, s3Client, obj)
+		ok, err := verifier.Verify()
 		if err != nil {
-			// This isn't about whether the checksum verification succeeded or failed,
-			// rather it indicates we failed to access or update the database about it or schedule the next check
-			log.Printf("failure processing checksum verification: %s", err.Error())
+			// This indicates we failed to access or update the database or schedule the next check
+			log.Printf("Failure processing checksum verification: %s", err.Error())
 			notification := notifications.ChecksumFailureNotification{
 				Account:      accountID,
 				Bucket:       obj.Bucket,
@@ -103,78 +102,27 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			if err := notifications.SendNotification(ctx, snsClient, notification); err != nil {
 				log.Printf("Failed to send checksum failure notification: %v", err)
 			}
-			continue
 		}
-	}
 
-	return nil
-}
+		if ok {
+			log.Printf("Checksum verification successful: %s", obj.URI())
+		} else {
+			log.Printf("Checksum verification failed: %s", obj.URI())
+			notification := notifications.ChecksumFailureNotification{
+				Account:      accountID,
+				Bucket:       obj.Bucket,
+				Object:       obj.Key,
+				Date:         record.Change.ApproximateCreationDateTime.String(),
+				ErrorMessage: "First notice of checksum verification failure.",
+				Stack:        stackName,
+				Title:        fmt.Sprintf("DuraCloud Checksum Verification Failure (1): %s", obj.URI()),
+				Template:     notificationTmpl,
+				Topic:        snsTopicArn,
+			}
 
-func extractBucketAndObject(record events.DynamoDBEventRecord) (files.S3Object, error) {
-	bucket, exists := record.Change.OldImage[string(db.ChecksumTableBucketNameId)]
-	if !exists {
-		return files.S3Object{}, fmt.Errorf("missing bucket name attribute")
-	}
-
-	object, exists := record.Change.OldImage[string(db.ChecksumTableObjectKeyId)]
-	if !exists {
-		return files.S3Object{}, fmt.Errorf("missing object key attribute")
-	}
-
-	return files.S3Object{Bucket: bucket.String(), Key: object.String()}, nil
-}
-
-func isTTLExpiry(record events.DynamoDBEventRecord) bool {
-	return record.EventName == "REMOVE" &&
-		record.UserIdentity != nil &&
-		record.UserIdentity.Type == "Service" &&
-		record.UserIdentity.PrincipalID == "dynamodb.amazonaws.com"
-}
-
-func processChecksumVerification(ctx context.Context, ddb *db.DB, s3Client *s3.Client, obj files.S3Object) error {
-	log.Printf("Starting checksum verification for: %s/%s", obj.Bucket, obj.Key)
-
-	currentTime := time.Now()
-	nextScheduledTime, err := db.GetNextScheduledTime()
-	if err != nil {
-		return err
-	}
-
-	checksumRecord, err := ddb.Get(obj)
-	if err != nil {
-		return err
-	}
-
-	checksumRecord.LastChecksumDate = currentTime
-	checksumRecord.NextChecksumDate = nextScheduledTime
-
-	calc := checksum.NewS3Calculator(s3Client)
-	checksumResult, err := calc.CalculateChecksum(ctx, obj)
-	if err != nil {
-		checksumRecord.LastChecksumMessage = err.Error()
-		checksumRecord.LastChecksumSuccess = false
-	} else if checksumResult != checksumRecord.Checksum {
-		msg := fmt.Sprintf("Checksum mismatch: calculated=%s, stored=%s", checksumResult, checksumRecord.Checksum)
-		log.Println(msg)
-		checksumRecord.LastChecksumMessage = msg
-		checksumRecord.LastChecksumSuccess = false
-	} else {
-		// Technically this is redundant but included for clarity
-		checksumRecord.LastChecksumMessage = "ok"
-		checksumRecord.LastChecksumSuccess = true
-	}
-
-	err = ddb.Put(checksumRecord)
-	if err != nil {
-		log.Printf("Failed to update checksum record due to : %v", err)
-		return err
-	}
-
-	if checksumRecord.LastChecksumSuccess {
-		log.Printf("Checksum verification succeeded for: %s/%s", obj.Bucket, obj.Key)
-		err = ddb.Schedule(checksumRecord)
-		if err != nil {
-			return err
+			if err := notifications.SendNotification(ctx, snsClient, notification); err != nil {
+				log.Printf("Failed to send checksum failure notification: %v", err)
+			}
 		}
 	}
 
