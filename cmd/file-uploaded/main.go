@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -76,7 +74,8 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		obj := files.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
 		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
-		if err := processUploadedObject(ctx, ddb, s3Client, obj, parsedEvent.Etag()); err != nil {
+		verifier := checksum.NewVerifier(ctx, ddb, s3Client, obj)
+		if err := verifier.Deposit(parsedEvent.Etag()); err != nil {
 			if files.TryObject(ctx, s3Client, obj) {
 				// Only retry if the uploaded file (still) exists
 				failedEvents = append(failedEvents, events.SQSBatchItemFailure{
@@ -91,51 +90,6 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	return events.SQSEventResponse{
 		BatchItemFailures: failedEvents,
 	}, nil
-}
-
-func processUploadedObject(ctx context.Context, ddb *db.DB, s3Client *s3.Client, obj files.S3Object, etag string) error {
-	nextScheduledTime, err := db.GetNextScheduledTime()
-	if err != nil {
-		return err
-	}
-
-	calc := checksum.NewS3Calculator(s3Client)
-	hash, err := calc.CalculateChecksum(ctx, obj)
-
-	// Optimistic outlook for our adventurer checksum record
-	checksumRecord := db.ChecksumRecord{
-		BucketName:          obj.Bucket,
-		ObjectKey:           obj.Key,
-		Checksum:            hash, // "" if failed
-		LastChecksumDate:    time.Now(),
-		LastChecksumMessage: "ok",
-		LastChecksumSuccess: true,
-		NextChecksumDate:    nextScheduledTime,
-	}
-
-	// Check that the hash matches the etag for non-multipart uploads (those are calculated differently)
-	// This provides a "free" reference check that the calculated hash is accurate
-	if err == nil && !strings.Contains(etag, "-") && hash != etag {
-		err = fmt.Errorf("checksum does not match etag: calculated=%s etag=%s", hash, etag)
-	}
-
-	if err != nil {
-		log.Printf("Failed to calculate checksum: %v", err)
-		checksumRecord.LastChecksumMessage = err.Error()
-		checksumRecord.LastChecksumSuccess = false
-	} else {
-		err = ddb.Schedule(checksumRecord)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = ddb.Put(checksumRecord)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func main() {
