@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -62,10 +61,14 @@ func NewFixityTestHelper(t *testing.T) *FixityTestHelper {
 func (h *FixityTestHelper) CreateTestBucket(t *testing.T, suffix string) string {
 	// Add random UUID to make bucket name unique and avoid conflicts during cleanup/recreation
 	uid := uuid.New().String()[:12]
-	bucketName := fmt.Sprintf("%s-%s-%s", h.StackName, suffix, uid)
+	bucketName := fmt.Sprintf("%s-%s", uid, suffix)
+
+	bucketRequest := buckets.NewBucketRequest(
+		h.Context, h.Clients.S3, bucketName, h.StackName, "", "", nil,
+	)
 
 	// Create bucket directly with essential configurations for fixity testing
-	err := h.createBucketDirectly(t, bucketName)
+	err := h.createBucket(t, bucketRequest)
 	require.NoError(t, err, "Should create bucket directly for fixity testing")
 
 	t.Logf("Created test bucket directly: %s", bucketName)
@@ -265,49 +268,30 @@ func (h *FixityTestHelper) WaitForVerification(t *testing.T, bucketName, fileNam
 
 // Private helper methods for bucket creation
 
-// createBucketDirectly creates a bucket with essential configurations needed for fixity testing
-func (h *FixityTestHelper) createBucketDirectly(t *testing.T, bucketName string) error {
-	ctx := h.Context
-	s3Client := h.Clients.S3
-
+// createBucket creates a bucket with essential configurations needed for fixity testing
+func (h *FixityTestHelper) createBucket(t *testing.T, br *buckets.BucketRequest) error {
 	// Step 1: Create the main bucket
-	if err := h.createBasicBucket(ctx, s3Client, bucketName); err != nil {
-		return fmt.Errorf("failed to create bucket %s: %w", bucketName, err)
+	if err := br.CreateNewBucket(br.FullName()); err != nil {
+		return fmt.Errorf("failed to create bucket %s: %w", br.FullName(), err)
 	}
 
 	// Step 2: Enable versioning (required for fixity checking)
-	if err := h.enableBucketVersioning(ctx, s3Client, bucketName); err != nil {
-		return fmt.Errorf("failed to enable versioning for %s: %w", bucketName, err)
+	if err := br.EnableVersioning(br.FullName()); err != nil {
+		return fmt.Errorf("failed to enable versioning for %s: %w", br.FullName(), err)
 	}
 
 	// Step 3: Enable EventBridge notifications (essential for file upload events)
-	if err := h.enableEventBridgeNotifications(ctx, s3Client, bucketName); err != nil {
-		return fmt.Errorf("failed to enable EventBridge for %s: %w", bucketName, err)
+	if err := br.EnableEventBridge(br.FullName()); err != nil {
+		return fmt.Errorf("failed to enable EventBridge for %s: %w", br.FullName(), err)
 	}
 
 	// Step 4: Add basic tags for identification
-	if err := h.addBasicBucketTags(ctx, s3Client, bucketName); err != nil {
-		return fmt.Errorf("failed to add tags to %s: %w", bucketName, err)
+	if err := br.AddBucketTags(br.FullName(), "Test"); err != nil {
+		return fmt.Errorf("failed to add tags to %s: %w", br.FullName(), err)
 	}
 
-	t.Logf("Successfully configured bucket %s for fixity testing", bucketName)
+	t.Logf("Successfully configured bucket %s for fixity testing", br.FullName())
 	return nil
-}
-
-func (h *FixityTestHelper) addBasicBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	return buckets.AddBucketTags(ctx, s3Client, bucketName, h.StackName, "Test")
-}
-
-func (h *FixityTestHelper) createBasicBucket(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	return buckets.CreateNewBucket(ctx, s3Client, bucketName)
-}
-
-func (h *FixityTestHelper) enableBucketVersioning(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	return buckets.EnableVersioning(ctx, s3Client, bucketName)
-}
-
-func (h *FixityTestHelper) enableEventBridgeNotifications(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	return buckets.EnableEventBridge(ctx, s3Client, bucketName)
 }
 
 // Public standalone functions
