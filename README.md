@@ -176,7 +176,8 @@ make output-logs func=checksum-export-csv-report interval=5m
 
 # Generate a storage html report (uploads to managed bucket: reports)
 # This is not useful for bucket level storage stats given cloudwatch metrics
-# delay, but is fine for top level prefix counts
+# delay, but is fine for top level prefix counts.
+# The bucket param is used as the destination for some test/tmp files
 make workflow-storage-report bucket=your-stack-name-private
 make output-logs func=report-generator interval=5m
 ```
