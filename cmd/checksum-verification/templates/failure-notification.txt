@@ -1,4 +1,4 @@
-Checksum verification processing was not completed for:
+Checksum verification had an issue for:
 
 Account: {{.Account}}
 Stack: {{.Stack}}
@@ -8,9 +8,11 @@ Bucket: {{.Bucket}}
 Object: {{.Object}}
 Error: {{.ErrorMessage}}
 
-If the error message is inconclusive, it could mean:
+A checksum processing error refers to:
 
 - There was an error determining the next checksum verification date
 - There was an error accessing the checksum record from the database
 - There was an error writing the checksum result back to the database
 - There was an error writing the next scheduled check to the database
+
+A checksum verification error should be followed by a notification containing details.
