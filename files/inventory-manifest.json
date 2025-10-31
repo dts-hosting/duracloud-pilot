@@ -1,0 +1,15 @@
+{
+  "sourceBucket": "duracloud-tftest-special",
+  "destinationBucket": "arn:aws:s3:::duracloud-tftest-managed",
+  "version": "2016-11-30",
+  "creationTimestamp": "1761613201000",
+  "fileFormat": "CSV",
+  "fileSchema": "Bucket, Key, VersionId, IsLatest, IsDeleteMarker, Size, LastModifiedDate, StorageClass",
+  "files": [
+    {
+      "key": "inventory/duracloud-tftest-special/inventory/data/73c102a0-de11-4e95-9822-d10990fd83a8.csv.gz",
+      "size": 194,
+      "MD5checksum": "4f39f9841460e250b494a6ab41a57c66"
+    }
+  ]
+}

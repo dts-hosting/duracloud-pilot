@@ -137,10 +137,11 @@ func (h *FixityTestHelper) InvokeVerificationFunction(t *testing.T, record db.Ch
 
 // SimulateCorruption simulates file corruption by modifying the stored checksum in the database
 func (h *FixityTestHelper) SimulateCorruption(t *testing.T, bucketName, fileName string) db.ChecksumRecord {
+	ddb := db.NewDB(h.Context, h.Clients.DynamoDB, h.ChecksumTableName, h.SchedulerTableName)
 	obj := files.NewS3Object(bucketName, fileName)
 
 	// Get the current record
-	record, err := db.GetChecksumRecord(h.Context, h.Clients.DynamoDB, h.ChecksumTableName, obj)
+	record, err := ddb.Get(obj)
 	require.NoError(t, err, "Should retrieve existing checksum record")
 
 	// Modify the checksum to simulate corruption
@@ -154,7 +155,7 @@ func (h *FixityTestHelper) SimulateCorruption(t *testing.T, bucketName, fileName
 	record.Checksum = corruptedChecksum
 
 	// Update the record with the corrupted checksum
-	err = db.PutChecksumRecord(h.Context, h.Clients.DynamoDB, h.ChecksumTableName, record)
+	err = ddb.Put(record)
 	require.NoError(t, err, "Should update checksum record with corrupted checksum")
 
 	t.Logf("Simulated corruption for %s/%s: original=%s, corrupted=%s",
@@ -165,7 +166,9 @@ func (h *FixityTestHelper) SimulateCorruption(t *testing.T, bucketName, fileName
 
 // UploadTestFile uploads a test file to S3 and returns the expected checksum
 func (h *FixityTestHelper) UploadTestFile(t *testing.T, bucketName, fileName, content string) string {
-	err := uploadToS3(h.Context, h.Clients.S3, bucketName, fileName, content)
+	o := files.NewS3Object(bucketName, fileName)
+	c := strings.NewReader(content)
+	err := files.UploadObject(h.Context, h.Clients.S3, o, c, "text/plain")
 	require.NoError(t, err, "Should upload test file %s to bucket %s", fileName, bucketName)
 
 	expectedChecksum := fmt.Sprintf("%x", md5.Sum([]byte(content)))
@@ -225,7 +228,8 @@ func (h *FixityTestHelper) WaitForThenValidateChecksum(t *testing.T, bucketName,
 			!record.NextChecksumDate.IsZero()
 	}
 
-	record, success := WaitForDynamoDBRecord(t, h.Clients, h.ChecksumTableName, &obj, validator, cfg)
+	ddb := db.NewDB(context.Background(), h.Clients.DynamoDB, h.ChecksumTableName, h.SchedulerTableName)
+	record, success := WaitForDynamoDBRecord(t, ddb, &obj, validator, cfg)
 	require.True(t, success, "Should retrieve and validate initial checksum record within timeout")
 
 	// Use comprehensive validation function
@@ -251,7 +255,8 @@ func (h *FixityTestHelper) WaitForVerification(t *testing.T, bucketName, fileNam
 		return record.LastChecksumDate.After(lastChecksumDate)
 	}
 
-	record, success := WaitForDynamoDBRecord(t, h.Clients, h.ChecksumTableName, &obj, validator, cfg)
+	ddb := db.NewDB(context.Background(), h.Clients.DynamoDB, h.ChecksumTableName, h.SchedulerTableName)
+	record, success := WaitForDynamoDBRecord(t, ddb, &obj, validator, cfg)
 	require.True(t, success, "Should retrieve updated checksum record after verification within timeout")
 
 	t.Logf("Verification completed for %s/%s", bucketName, fileName)

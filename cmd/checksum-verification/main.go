@@ -70,6 +70,8 @@ func init() {
 }
 
 func handler(ctx context.Context, event events.DynamoDBEvent) error {
+	ddb := db.NewDB(ctx, dynamodbClient, checksumTable, schedulerTable)
+
 	for _, record := range event.Records {
 		if !isTTLExpiry(record) {
 			continue
@@ -81,7 +83,7 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		err = processChecksumVerification(ctx, s3Client, dynamodbClient, obj, checksumTable, schedulerTable)
+		err = processChecksumVerification(ctx, ddb, s3Client, obj)
 		if err != nil {
 			// This isn't about whether the checksum verification succeeded or failed,
 			// rather it indicates we failed to access or update the database about it or schedule the next check
@@ -129,14 +131,7 @@ func isTTLExpiry(record events.DynamoDBEventRecord) bool {
 		record.UserIdentity.PrincipalID == "dynamodb.amazonaws.com"
 }
 
-func processChecksumVerification(
-	ctx context.Context,
-	s3Client *s3.Client,
-	dynamodbClient *dynamodb.Client,
-	obj files.S3Object,
-	checksumTable string,
-	schedulerTable string,
-) error {
+func processChecksumVerification(ctx context.Context, ddb *db.DB, s3Client *s3.Client, obj files.S3Object) error {
 	log.Printf("Starting checksum verification for: %s/%s", obj.Bucket, obj.Key)
 
 	currentTime := time.Now()
@@ -145,7 +140,7 @@ func processChecksumVerification(
 		return err
 	}
 
-	checksumRecord, err := db.GetChecksumRecord(ctx, dynamodbClient, checksumTable, obj)
+	checksumRecord, err := ddb.Get(obj)
 	if err != nil {
 		return err
 	}
@@ -169,7 +164,7 @@ func processChecksumVerification(
 		checksumRecord.LastChecksumSuccess = true
 	}
 
-	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	err = ddb.Put(checksumRecord)
 	if err != nil {
 		log.Printf("Failed to update checksum record due to : %v", err)
 		return err
@@ -177,7 +172,7 @@ func processChecksumVerification(
 
 	if checksumRecord.LastChecksumSuccess {
 		log.Printf("Checksum verification succeeded for: %s/%s", obj.Bucket, obj.Key)
-		err = db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
+		err = ddb.Schedule(checksumRecord)
 		if err != nil {
 			return err
 		}

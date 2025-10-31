@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"duracloud/internal/buckets"
+	"duracloud/internal/files"
 	"fmt"
 	"html/template"
 	"log"
@@ -215,12 +216,9 @@ func (g *StorageReportGenerator) processBuckets(
 	}
 	close(bucketQueue)
 
-	numWorkers := MaxConcurrentWorkers
-	if len(buckets) < numWorkers {
-		numWorkers = len(buckets)
-	}
+	numWorkers := min(MaxConcurrentWorkers, len(buckets))
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -430,12 +428,9 @@ func (g *StorageReportGenerator) processPrefixes(
 	}
 	close(prefixQueue)
 
-	numWorkers := PrefixWorkerPoolSize
-	if len(prefixes) < numWorkers {
-		numWorkers = len(prefixes)
-	}
+	numWorkers := min(PrefixWorkerPoolSize, len(prefixes))
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -576,13 +571,8 @@ func (g *StorageReportGenerator) generateHTML(data ReportData, tmpl *template.Te
 
 func (g *StorageReportGenerator) UploadReport(ctx context.Context, bucketName, key, content string) error {
 	log.Printf("Uploading report to bucket: %s/%s\n", bucketName, key)
-
-	_, err := g.s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(key),
-		Body:        strings.NewReader(content),
-		ContentType: aws.String("text/html"),
-	})
+	obj := files.NewS3Object(bucketName, key)
+	err := files.UploadObject(ctx, g.s3Client, obj, strings.NewReader(content), "text/html")
 
 	return err
 }

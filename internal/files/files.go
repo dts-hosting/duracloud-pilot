@@ -27,26 +27,26 @@ func (obj S3Object) URI() string {
 }
 
 // DownloadObject returns a streaming reader for S3 object with optional gzip decompression
-func DownloadObject(ctx context.Context, s3Client *s3.Client, bucket, key string, decompress bool) (io.ReadCloser, error) {
-	obj, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
+func DownloadObject(ctx context.Context, s3Client *s3.Client, obj S3Object, decompress bool) (io.ReadCloser, error) {
+	res, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(obj.Bucket),
+		Key:    aws.String(obj.Key),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object: %w", err)
 	}
 
 	if !decompress {
-		return obj.Body, nil
+		return res.Body, nil
 	}
 
-	gzr, err := gzip.NewReader(obj.Body)
+	gzr, err := gzip.NewReader(res.Body)
 	if err != nil {
-		_ = obj.Body.Close()
+		_ = res.Body.Close()
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 
-	return &gzipReadCloser{Reader: gzr, underlying: obj.Body}, nil
+	return &gzipReadCloser{Reader: gzr, underlying: res.Body}, nil
 }
 
 // TryObject checks if an S3 object exists and can be accessed by performing a HeadObject operation.
@@ -56,6 +56,18 @@ func TryObject(ctx context.Context, s3Client *s3.Client, obj S3Object) bool {
 		Key:    aws.String(obj.Key),
 	})
 	return err == nil
+}
+
+// UploadObject with given reader for content
+// TODO: support content-type
+func UploadObject(ctx context.Context, s3Client *s3.Client, obj S3Object, content io.Reader, contentType string) error {
+	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(obj.Bucket),
+		Key:         aws.String(obj.Key),
+		Body:        content,
+		ContentType: &contentType,
+	})
+	return err
 }
 
 type gzipReadCloser struct {

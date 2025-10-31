@@ -9,6 +9,7 @@ resource "aws_cloudwatch_metric_alarm" "checksum_export_csv_report_function_erro
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "Error generating CSV report from checksum table export"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.checksum_export_csv_report_function.function_name
@@ -31,6 +32,7 @@ resource "aws_cloudwatch_metric_alarm" "checksum_exporter_function_error_alarm" 
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "Error generating checksum table export"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.checksum_exporter_function.function_name
@@ -53,6 +55,7 @@ resource "aws_cloudwatch_metric_alarm" "checksum_verification_function_concurren
   statistic           = "Maximum"
   threshold           = "800"
   alarm_description   = "High concurrency processing checksum verifications"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.checksum_verification_function.function_name
@@ -76,6 +79,7 @@ resource "aws_cloudwatch_metric_alarm" "checksum_verification_function_error_ala
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "Error processing checksum verification"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.checksum_verification_function.function_name
@@ -146,6 +150,7 @@ resource "aws_cloudwatch_metric_alarm" "report_generator_function_error_alarm" {
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "Error generating storage stats report"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     FunctionName = aws_lambda_function.report_generator_function.function_name
@@ -168,12 +173,14 @@ resource "aws_cloudwatch_metric_alarm" "sqs_object_created_alarm" {
   statistic           = "Average"
   threshold           = "1"
   alarm_description   = "Messages present in file uploaded DLQ"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     QueueName = aws_sqs_queue.object_created_dlq.name
   }
 
   alarm_actions = local.enable_email_alerts ? [aws_sns_topic.email_alert_topic.arn] : []
+  ok_actions    = local.enable_email_alerts ? [aws_sns_topic.email_alert_topic.arn] : []
 
   tags = {
     Name = "${local.stack_name}-object-created-dlq-messages"
@@ -190,12 +197,14 @@ resource "aws_cloudwatch_metric_alarm" "sqs_object_deleted_alarm" {
   statistic           = "Average"
   threshold           = "1"
   alarm_description   = "Messages present in file deleted DLQ"
+  treat_missing_data  = "notBreaching"
 
   dimensions = {
     QueueName = aws_sqs_queue.object_deleted_dlq.name
   }
 
   alarm_actions = local.enable_email_alerts ? [aws_sns_topic.email_alert_topic.arn] : []
+  ok_actions    = local.enable_email_alerts ? [aws_sns_topic.email_alert_topic.arn] : []
 
   tags = {
     Name = "${local.stack_name}-object-deleted-dlq-messages"

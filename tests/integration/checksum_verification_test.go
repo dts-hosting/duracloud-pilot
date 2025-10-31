@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
@@ -49,19 +48,16 @@ func TestChecksumVerification(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
+			content := bytes.NewReader(tt.content)
+			obj := files.NewS3Object(testBucket, tt.key)
 
 			// Upload test content to S3
-			_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-				Bucket: aws.String(testBucket),
-				Key:    aws.String(tt.key),
-				Body:   bytes.NewReader(tt.content),
-			})
+			err = files.UploadObject(ctx, s3Client, obj, content, "text/plain")
 			if err != nil {
 				t.Fatalf("failed to upload test object: %v", err)
 			}
 
 			// Calculate checksum
-			obj := files.NewS3Object(testBucket, tt.key)
 			result, err := calc.CalculateChecksum(ctx, obj)
 			if err != nil {
 				t.Fatalf("failed to calculate checksum: %v", err)

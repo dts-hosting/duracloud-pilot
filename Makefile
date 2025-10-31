@@ -172,7 +172,7 @@ workflow-checksum-report: ## Generate a checksum csv report
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file3.json.gz
 	@aws s3 cp files/abcdef654321.json.gz \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file4.json.gz
-	@aws s3 cp files/manifest-files.json \
+	@aws s3 cp files/export-manifest.json \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/manifest-files.json
 
 .PHONY: workflow-cleanup

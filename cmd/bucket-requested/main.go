@@ -4,6 +4,7 @@ import (
 	"context"
 	"duracloud/internal/accounts"
 	"duracloud/internal/buckets"
+	"duracloud/internal/files"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -64,11 +65,10 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		Event: &s3Event,
 	}
 
-	bucketName := e.BucketName()
-	objectKey := e.ObjectKey()
-	log.Printf("Received event for bucket name: %s, object key: %s", bucketName, objectKey)
+	obj := files.NewS3Object(e.BucketName(), e.ObjectKey())
+	log.Printf("Received event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
-	requestedBuckets, err := buckets.GetBuckets(ctx, s3Client, bucketName, objectKey, bucketLimit)
+	requestedBuckets, err := buckets.GetBuckets(ctx, s3Client, obj, bucketLimit)
 	if err != nil {
 		bucketsStatus[buckets.BucketRequestedFileErrorKey] = err.Error()
 		_ = buckets.WriteStatus(ctx, s3Client, managedBucketName, bucketsStatus)
@@ -91,7 +91,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 		}(requestedBucketName)
 	}
 
-	for i := 0; i < len(requestedBuckets); i++ {
+	for range len(requestedBuckets) {
 		results := <-resultChan
 		for bucket, status := range results {
 			log.Printf("Bucket status: %s %s\n", bucket, status)
@@ -103,6 +103,8 @@ func handler(ctx context.Context, event json.RawMessage) error {
 	if err != nil {
 		return fmt.Errorf("could not write bucket status to managed bucket: %v", err)
 	}
+
+	log.Printf("Successfully processed event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
 	return nil
 }

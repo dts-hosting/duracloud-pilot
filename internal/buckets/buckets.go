@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"context"
 	"duracloud/internal/accounts"
+	"duracloud/internal/files"
 	"encoding/json"
 	"fmt"
-	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -93,9 +93,9 @@ func AddBucketTags(ctx context.Context, s3Client *s3.Client, bucketName string, 
 
 func AddDenyUploadPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
 	// apply a default deny-upload policy
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Sid":       "DenyAllUploads",
 				"Effect":    "Deny",
@@ -171,9 +171,9 @@ func AddLifecycle(ctx context.Context, s3Client *s3.Client, bucketName string, s
 }
 
 func AddPublicPolicy(ctx context.Context, s3Client *s3.Client, bucketName string) error {
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Sid":       "AllowPublicRead",
 				"Effect":    "Allow",
@@ -377,22 +377,17 @@ func GetBucketRequestLimit(bucketsPerRequest string) (int, error) {
 }
 
 // GetBuckets retrieves a list of valid bucket names from an S3 object, validates them, and enforces a maximum limit.
-func GetBuckets(ctx context.Context, s3Client *s3.Client, bucket string, key string, limit int) ([]string, error) {
+func GetBuckets(ctx context.Context, s3Client *s3.Client, obj files.S3Object, limit int) ([]string, error) {
 	var buckets []string
 
-	resp, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
-	})
+	resp, err := files.DownloadObject(ctx, s3Client, obj, false)
 
 	if err != nil {
-		return nil, ErrorRetrievingObject(key, bucket, err)
+		return nil, ErrorRetrievingObject(obj.Key, obj.Bucket, err)
 	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
+	defer func() { _ = resp.Close() }()
 
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(resp)
 
 	for scanner.Scan() {
 		line := strings.ToLower(scanner.Text())
@@ -529,13 +524,9 @@ func WriteStatus(ctx context.Context, s3Client *s3.Client, bucketName string, lo
 	now := time.Now().UTC()
 	timestamp := now.Format(time.RFC3339)
 	key := fmt.Sprintf("logs/bucket-request-log-%s.txt", timestamp)
+	obj := files.NewS3Object(bucketName, key)
 
-	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(key),
-		Body:        reader,
-		ContentType: aws.String("text/plain"),
-	})
+	err := files.UploadObject(ctx, s3Client, obj, reader, "text/plain")
 	if err != nil {
 		return ErrorBucketStatusUploadFailed(err)
 	}

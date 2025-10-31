@@ -60,6 +60,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	}
 
 	parsedEvents, failedEvents := sqsEventWrapper.UnwrapS3EventBridgeEvents()
+	ddb := db.NewDB(ctx, dynamodbClient, checksumTable, schedulerTable)
 
 	for _, parsedEvent := range parsedEvents {
 		if parsedEvent.BucketPrefix() != bucketPrefix {
@@ -75,7 +76,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 		obj := files.NewS3Object(parsedEvent.BucketName(), parsedEvent.ObjectKey())
 		log.Printf("Processing upload event for bucket name: %s, object key: %s", obj.Bucket, obj.Key)
 
-		if err := processUploadedObject(ctx, s3Client, dynamodbClient, obj, parsedEvent.Etag()); err != nil {
+		if err := processUploadedObject(ctx, ddb, s3Client, obj, parsedEvent.Etag()); err != nil {
 			if files.TryObject(ctx, s3Client, obj) {
 				// Only retry if the uploaded file (still) exists
 				failedEvents = append(failedEvents, events.SQSBatchItemFailure{
@@ -92,13 +93,7 @@ func handler(ctx context.Context, event json.RawMessage) (events.SQSEventRespons
 	}, nil
 }
 
-func processUploadedObject(
-	ctx context.Context,
-	s3Client *s3.Client,
-	dynamodbClient *dynamodb.Client,
-	obj files.S3Object,
-	etag string,
-) error {
+func processUploadedObject(ctx context.Context, ddb *db.DB, s3Client *s3.Client, obj files.S3Object, etag string) error {
 	nextScheduledTime, err := db.GetNextScheduledTime()
 	if err != nil {
 		return err
@@ -129,13 +124,13 @@ func processUploadedObject(
 		checksumRecord.LastChecksumMessage = err.Error()
 		checksumRecord.LastChecksumSuccess = false
 	} else {
-		err = db.ScheduleNextVerification(ctx, dynamodbClient, schedulerTable, checksumRecord)
+		err = ddb.Schedule(checksumRecord)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = db.PutChecksumRecord(ctx, dynamodbClient, checksumTable, checksumRecord)
+	err = ddb.Put(checksumRecord)
 	if err != nil {
 		return err
 	}
