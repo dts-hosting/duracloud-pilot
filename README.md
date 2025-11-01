@@ -8,6 +8,7 @@ on top of AWS S3 to support long term access to and preservation of files.
 
 - [User Documentation](#)
 - [Technical Documentation](TECHNICAL.md)
+- [Developer Documentation](DEV.md)
 
 ## Prerequisites
 
