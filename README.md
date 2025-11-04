@@ -175,7 +175,7 @@ make output-logs func=file-deleted interval=5m
 make workflow-checksum-report
 make output-logs func=checksum-export-csv-report interval=5m
 
-# Unwrap an inventory export to plain CSV with headers
+# Unwrap an inventory export to plain CSV with headers and generate stats
 # TODO: currently this is hard-coded to stack tftest and needs to be generalized
 make workflow-inventory-unwrap
 make output-logs func=inventory-unwrap interval=5m

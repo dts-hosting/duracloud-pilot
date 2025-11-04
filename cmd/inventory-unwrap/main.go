@@ -49,7 +49,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	// Process the manifest and collect the files to process
 	unwrapper := inventory.NewInventoryUnwrapper(ctx, s3Client, obj)
-	err := unwrapper.ConcatenateInventoryFiles()
+	err := unwrapper.ProcessInventoryFiles()
 	if err != nil {
 		return fmt.Errorf("error generating consolidated inventory: %w", err)
 	}
