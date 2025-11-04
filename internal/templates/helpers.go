@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+	"time"
 )
 
 // GetReportGeneratorFuncMap returns the template functions for reports
@@ -11,6 +12,7 @@ func GetReportGeneratorFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"formatBytes":  FormatBytes,
 		"formatNumber": FormatNumber,
+		"formatTime":   FormatTime,
 	}
 }
 
@@ -44,4 +46,9 @@ func FormatNumber(n int64) string {
 		result = append([]string{str[start:i]}, result...)
 	}
 	return strings.Join(result, ",")
+}
+
+// FormatTime formats a time.Time value
+func FormatTime(t time.Time) string {
+	return t.Format("2006-01-02 15:04:05 UTC")
 }

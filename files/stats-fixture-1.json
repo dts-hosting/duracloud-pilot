@@ -1,0 +1,26 @@
+{
+  "bucket_name": "duracloud-tftest-private",
+  "inventory_date": "2025-01-15",
+  "generated_at": "2025-01-15T10:30:00Z",
+  "source_inventory_date": "1737800000000",
+  "total_count": 5234,
+  "total_bytes": 15728640000,
+  "prefix_stats": {
+    "documents/": {
+      "count": 2500,
+      "bytes": 10485760000
+    },
+    "images/": {
+      "count": 1500,
+      "bytes": 4194304000
+    },
+    "logs/": {
+      "count": 1000,
+      "bytes": 838860800
+    },
+    "": {
+      "count": 234,
+      "bytes": 209715200
+    }
+  }
+}

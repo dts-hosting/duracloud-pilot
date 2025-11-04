@@ -181,10 +181,10 @@ make workflow-inventory-unwrap
 make output-logs func=inventory-unwrap interval=5m
 
 # Generate a storage html report (uploads to managed bucket: reports)
-# This is not useful for bucket level storage stats given cloudwatch metrics
-# delay, but is fine for top level prefix counts.
-# The bucket param is used as the destination for some test/tmp files
-make workflow-storage-report bucket=your-stack-name-private
+# Uses pre-computed stats from inventory unwrap. This command uploads fixture
+# stats files and then generates a report from them. In production, stats are
+# generated automatically when inventory manifests arrive.
+make workflow-storage-report
 make output-logs func=report-generator interval=5m
 ```
 

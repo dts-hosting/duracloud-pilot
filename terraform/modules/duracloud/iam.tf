@@ -694,9 +694,6 @@ resource "aws_iam_role_policy" "report_generator_function_policy" {
       {
         Effect = "Allow"
         Action = [
-          "cloudwatch:GetMetricStatistics",
-          "cloudwatch:GetMetricData",
-          "cloudwatch:ListMetrics",
           "s3:GetBucketTagging",
           "s3:GetObject",
           "s3:ListAllMyBuckets",
@@ -713,7 +710,10 @@ resource "aws_iam_role_policy" "report_generator_function_policy" {
           "s3:ListBucketMultipartUploads",
           "s3:ListMultipartUploadParts"
         ]
-        Resource = "${aws_s3_bucket.managed_bucket.arn}/reports/*"
+        Resource = [
+          "${aws_s3_bucket.managed_bucket.arn}/inventory/*",
+          "${aws_s3_bucket.managed_bucket.arn}/reports/*"
+        ]
       },
       {
         Effect = "Allow"
