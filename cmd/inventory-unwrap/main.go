@@ -41,7 +41,7 @@ func handler(ctx context.Context, event json.RawMessage) error {
 
 	obj := files.NewS3Object(s3Event.BucketName(), s3Event.ObjectKey())
 
-	if !strings.HasSuffix(obj.Key, exports.ManifestFile) {
+	if !strings.HasSuffix(obj.Key, inventory.ManifestFile) {
 		return fmt.Errorf("invalid manifest file: %s", obj.Key)
 	}
 

@@ -34,5 +34,6 @@ module "duracloud" {
   checksum_verification_image_uri      = "${var.repo}/checksum-verification:${var.stack}"
   file_deleted_image_uri               = "${var.repo}/file-deleted:${var.stack}"
   file_uploaded_image_uri              = "${var.repo}/file-uploaded:${var.stack}"
+  inventory_unwrap_image_uri           = "${var.repo}/inventory-unwrap:${var.stack}"
   report_generator_image_uri           = "${var.repo}/report-generator:${var.stack}"
 }

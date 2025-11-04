@@ -62,6 +62,15 @@ resource "aws_cloudwatch_log_group" "file_uploaded_function" {
   }
 }
 
+resource "aws_cloudwatch_log_group" "inventory_unwrap_function" {
+  name              = "/aws/lambda/${local.stack_name}-inventory-unwrap"
+  retention_in_days = 30
+
+  tags = {
+    Name = "${local.stack_name}-inventory-unwrap-logs"
+  }
+}
+
 resource "aws_cloudwatch_log_group" "report_generator_function" {
   name              = "/aws/lambda/${local.stack_name}-report-generator"
   retention_in_days = 7
@@ -308,6 +317,36 @@ resource "aws_lambda_function" "file_uploaded_function" {
   }
 }
 
+resource "aws_lambda_function" "inventory_unwrap_function" {
+  function_name = "${local.stack_name}-inventory-unwrap"
+  role          = aws_iam_role.inventory_unwrap_function_role.arn
+  image_uri     = local.inventory_unwrap_image_uri
+  package_type  = "Image"
+  architectures = [local.lambda_architecture]
+  timeout       = 900
+  memory_size   = 256
+  description   = "DuraCloud function that converts inventory to plain csv with headers"
+
+  ephemeral_storage {
+    size = local.inventory_unwrap_storage
+  }
+
+  logging_config {
+    log_format = "JSON"
+    log_group  = aws_cloudwatch_log_group.inventory_unwrap_function.name
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.inventory_unwrap_function_basic,
+    aws_iam_role_policy.inventory_unwrap_function_policy,
+    aws_cloudwatch_log_group.inventory_unwrap_function,
+  ]
+
+  tags = {
+    Name = "${local.stack_name}-inventory-unwrap-function"
+  }
+}
+
 resource "aws_lambda_function" "report_generator_function" {
   function_name = "${local.stack_name}-report-generator"
   role          = aws_iam_role.report_generator_function_role.arn
@@ -438,8 +477,8 @@ resource "aws_lambda_permission" "checksum_exporter_invoke_permission" {
   depends_on = [aws_lambda_function.checksum_exporter_function]
 }
 
-resource "aws_lambda_permission" "s3_managed_bucket_invoke_permission" {
-  statement_id   = "AllowExecutionFromS3Bucket"
+resource "aws_lambda_permission" "checksum_export_csv_report_invoke_permission" {
+  statement_id   = "ChecksumExportCSVReportAllowExecutionFromS3"
   action         = "lambda:InvokeFunction"
   function_name  = aws_lambda_function.checksum_export_csv_report_function.function_name
   principal      = "s3.amazonaws.com"
@@ -449,6 +488,16 @@ resource "aws_lambda_permission" "s3_managed_bucket_invoke_permission" {
   depends_on = [aws_lambda_function.checksum_export_csv_report_function]
 }
 
+resource "aws_lambda_permission" "inventory_unwrap_invoke_permission" {
+  statement_id   = "InventoryUnwrapAllowExecutionFromS3"
+  action         = "lambda:InvokeFunction"
+  function_name  = aws_lambda_function.inventory_unwrap_function.function_name
+  principal      = "s3.amazonaws.com"
+  source_account = data.aws_caller_identity.current.account_id
+  source_arn     = aws_s3_bucket.managed_bucket.arn
+
+  depends_on = [aws_lambda_function.inventory_unwrap_function]
+}
 
 resource "aws_lambda_permission" "report_generator_invoke_permission" {
   statement_id  = "AllowExecutionFromEventBridge"

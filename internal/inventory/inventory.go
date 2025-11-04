@@ -17,6 +17,7 @@ import (
 )
 
 const InventoryFormat = "CSV"
+const ManifestFile = "manifest.json"
 const S3ArnLength = "arn:aws:s3:::"
 
 // InventoryUnwrapper provides utilites for processing an inventory manifest
@@ -141,8 +142,7 @@ func (m *InventoryManifest) Bucket() string {
 
 // Inventory returns an S3Object inventory location for upload
 func (m *InventoryManifest) Inventory() files.S3Object {
-	createdAt, _ := time.Parse(time.RFC3339, m.CreationTimestamp)
-	d := createdAt.Format("2006-01-02")
+	d := time.Now().UTC().Format("2006-01-02")
 	b := m.Bucket()
 	o := filepath.Join("inventory", m.SourceBucket, "inventory", "data", fmt.Sprintf("inventory-%s.csv", d))
 	return files.NewS3Object(b, o)

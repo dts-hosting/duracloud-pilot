@@ -22,8 +22,8 @@ func TestInventoryManifest_ParseFileSchema(t *testing.T) {
 	}
 
 	// Verify basic fields
-	if manifest.SourceBucket != "duracloud-tftest-special" {
-		t.Errorf("Expected sourceBucket 'duracloud-tftest-special', got '%s'", manifest.SourceBucket)
+	if manifest.SourceBucket != "duracloud-tftest-private" {
+		t.Errorf("Expected sourceBucket 'duracloud-tftest-private', got '%s'", manifest.SourceBucket)
 	}
 
 	if manifest.DestinationBucket != "arn:aws:s3:::duracloud-tftest-managed" {
@@ -63,7 +63,7 @@ func TestInventoryManifest_ParseFileSchema(t *testing.T) {
 	}
 
 	file := manifest.Files[0]
-	if file.Key != "inventory/duracloud-tftest-special/inventory/data/73c102a0-de11-4e95-9822-d10990fd83a8.csv.gz" {
+	if file.Key != "inventory/duracloud-tftest-private/inventory/data/inventory-123456.csv.gz" {
 		t.Errorf("Unexpected file key: %s", file.Key)
 	}
 
