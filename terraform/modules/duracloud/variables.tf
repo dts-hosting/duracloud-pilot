@@ -63,6 +63,18 @@ variable "file_uploaded_image_uri" {
   default     = "docker.io/duracloud/file-uploaded:latest"
 }
 
+variable "inventory_unwrap_image_uri" {
+  description = "Docker image for Inventory Unwrap function"
+  type        = string
+  default     = "docker.io/duracloud/inventory-unwrap:latest"
+}
+
+variable "inventory_unwrap_storage" {
+  description = "Amount of storage for Inventory Unwrap function"
+  type        = number
+  default     = 512
+}
+
 variable "report_generator_image_uri" {
   description = "Docker image for Report Generator function"
   type        = string

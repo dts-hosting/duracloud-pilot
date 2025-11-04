@@ -16,6 +16,7 @@ locals {
   checksum_exporter_schedule         = coalesce(var.checksum_exporter_schedule, null)
   checksum_export_csv_report_storage = var.checksum_export_csv_report_storage
   enable_email_alerts                = var.alert_email_address != ""
+  inventory_unwrap_storage           = var.inventory_unwrap_storage
   lambda_architecture                = var.lambda_architecture
   report_generator_schedule          = coalesce(var.report_generator_schedule, null)
 
@@ -27,5 +28,6 @@ locals {
   checksum_verification_image_uri      = coalesce(var.checksum_verification_image_uri, null)
   file_deleted_image_uri               = coalesce(var.file_deleted_image_uri, null)
   file_uploaded_image_uri              = coalesce(var.file_uploaded_image_uri, null)
+  inventory_unwrap_image_uri           = coalesce(var.inventory_unwrap_image_uri, null)
   report_generator_image_uri           = coalesce(var.report_generator_image_uri, null)
 }

@@ -49,6 +49,7 @@ docker-build:
 	@$(MAKE) docker-build-function function=checksum-verification
 	@$(MAKE) docker-build-function function=file-deleted
 	@$(MAKE) docker-build-function function=file-uploaded
+	@$(MAKE) docker-build-function function=inventory-unwrap
 	@$(MAKE) docker-build-function function=report-generator
 
 .PHONY: docker-build-function
@@ -71,6 +72,7 @@ docker-redeploy: ## Build, push and redeploy all functions
 	@$(MAKE) docker-deploy-function function=checksum-verification
 	@$(MAKE) docker-deploy-function function=file-deleted
 	@$(MAKE) docker-deploy-function function=file-uploaded
+	@$(MAKE) docker-deploy-function function=inventory-unwrap
 	@$(MAKE) docker-deploy-function function=report-generator
 
 .PHONY: docker-pull
@@ -88,6 +90,7 @@ docker-push:
 	@$(MAKE) docker-push-function function=checksum-verification
 	@$(MAKE) docker-push-function function=file-deleted
 	@$(MAKE) docker-push-function function=file-uploaded
+	@$(MAKE) docker-push-function function=inventory-unwrap
 	@$(MAKE) docker-push-function function=report-generator
 
 .PHONY: docker-push-function
@@ -156,6 +159,7 @@ update-functions: ## Update all functions using latest Docker img
 	@$(MAKE) update-function function=checksum-verification
 	@$(MAKE) update-function function=file-deleted
 	@$(MAKE) update-function function=file-uploaded
+	@$(MAKE) update-function function=inventory-unwrap
 	@$(MAKE) update-function function=report-generator
 
 .PHONY: workflow-checksum-fail
@@ -164,13 +168,13 @@ workflow-checksum-fail: ## Force a checksum failure (bucket=name file=key)
 
 .PHONY: workflow-checksum-report
 workflow-checksum-report: ## Generate a checksum csv report
-	@aws s3 cp files/abcdef123456.json.gz \
+	@aws s3 cp files/export-123456.json.gz \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file1.json.gz
-	@aws s3 cp files/abcdef123456.json.gz \
+	@aws s3 cp files/export-123456.json.gz \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file2.json.gz
-	@aws s3 cp files/abcdef654321.json.gz \
+	@aws s3 cp files/export-654321.json.gz \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file3.json.gz
-	@aws s3 cp files/abcdef654321.json.gz \
+	@aws s3 cp files/export-654321.json.gz \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/data/file4.json.gz
 	@aws s3 cp files/export-manifest.json \
 		s3://$(STACK_NAME)-managed/exports/checksum-table/2000-01-01/AWSDynamoDB/123456789-123456/manifest-files.json
@@ -186,6 +190,11 @@ workflow-delete: ## Delete a file from a bucket (root level only)
 .PHONY: workflow-expire-ttl
 workflow-expire-ttl: ## Expire TTL for checksum verification (bucket=name file=key)
 	@./scripts/expire-ttl.sh $(STACK_NAME) $(bucket) $(file)
+
+.PHONY: workflow-inventory-unwrap
+workflow-inventory-unwrap: ## Unwrap inventory
+	@aws s3 cp ./files/inventory-123456.csv.gz s3://$(STACK_NAME)-managed/inventory/duracloud-tftest-private/inventory/data/inventory-123456.csv.gz
+	@aws s3 cp ./files/inventory-manifest.json s3://$(STACK_NAME)-managed/inventory/duracloud-tftest-private/inventory/2000-01-01/manifest.json
 
 .PHONY: workflow-storage-report
 workflow-storage-report: ## Generate a storage html report

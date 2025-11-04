@@ -8,8 +8,7 @@ resource "aws_s3_bucket" "managed_bucket" {
 }
 
 resource "aws_s3_bucket_notification" "managed_bucket_notification" {
-  bucket     = aws_s3_bucket.managed_bucket.id
-  depends_on = [aws_lambda_permission.s3_managed_bucket_invoke_permission]
+  bucket = aws_s3_bucket.managed_bucket.id
 
   lambda_function {
     lambda_function_arn = aws_lambda_function.checksum_export_csv_report_function.arn
@@ -18,13 +17,17 @@ resource "aws_s3_bucket_notification" "managed_bucket_notification" {
     filter_suffix       = "manifest-files.json"
   }
 
-  # TODO: implement
-  # lambda_function {
-  #   lambda_function_arn = aws_lambda_function.inventory_unwrap_function.arn
-  #   events              = ["s3:ObjectCreated:*"]
-  #   filter_prefix       = "inventory/"
-  #   filter_suffix       = "manifest.json"
-  # }
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.inventory_unwrap_function.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "inventory/"
+    filter_suffix       = "manifest.json"
+  }
+
+  depends_on = [
+    aws_lambda_permission.checksum_export_csv_report_invoke_permission,
+    aws_lambda_permission.inventory_unwrap_invoke_permission
+  ]
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "managed_bucket_lifecycle" {

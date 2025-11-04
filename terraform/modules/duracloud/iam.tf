@@ -597,6 +597,66 @@ resource "aws_iam_role_policy" "file_uploaded_function_policy" {
   })
 }
 
+# Inventory Unwrap Function IAM
+resource "aws_iam_role" "inventory_unwrap_function_role" {
+  name = "${local.stack_name}-inventory-unwrap-function-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${local.stack_name}-inventory-unwrap-function-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "inventory_unwrap_function_basic" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role       = aws_iam_role.inventory_unwrap_function_role.name
+}
+
+resource "aws_iam_role_policy" "inventory_unwrap_function_policy" {
+  name = "${local.stack_name}-inventory-unwrap-function-policy"
+  role = aws_iam_role.inventory_unwrap_function_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts",
+          "s3:AbortMultipartUpload",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = [
+          "${aws_s3_bucket.managed_bucket.arn}/inventory/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.managed_bucket.arn
+      }
+    ]
+  })
+}
+
 # Report Generator Function IAM
 resource "aws_iam_role" "report_generator_function_role" {
   name = "${local.stack_name}-report-generator-function-role"

@@ -27,6 +27,7 @@ FUNCTIONS=(
   "checksum-verification"
   "file-deleted"
   "file-uploaded"
+  "inventory-unwrap"
   "report-generator"
 )
 

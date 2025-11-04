@@ -171,9 +171,14 @@ make output-logs func=file-deleted interval=5m
 
 # Generate a checksum csv report (uploads to managed bucket: exports)
 # We are using a prefab export files for relatively immediate results:
-# files/manifest-files.json,files/abcdef123456.json.gz,files/abcdef654321.json.gz
+# files/manifest-files.json,files/export-123456.json.gz,files/export-654321.json.gz
 make workflow-checksum-report
 make output-logs func=checksum-export-csv-report interval=5m
+
+# Unwrap an inventory export to plain CSV with headers
+# TODO: currently this is hard-coded to stack tftest and needs to be generalized
+make workflow-inventory-unwrap
+make output-logs func=inventory-unwrap interval=5m
 
 # Generate a storage html report (uploads to managed bucket: reports)
 # This is not useful for bucket level storage stats given cloudwatch metrics
