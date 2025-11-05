@@ -25,6 +25,7 @@ const (
 	PublicSuffix          = "-public"
 	ReplicationSuffix     = "-repl"
 
+	AbortIncompleteMultipartDays     = 2
 	ApplicationTagKey                = "Application"
 	ApplicationTagValue              = "DuraCloud"
 	BucketNameMaxChars               = 63

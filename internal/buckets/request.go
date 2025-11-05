@@ -87,6 +87,7 @@ func (b *BucketRequest) AddDenyUploadPolicy(name string) error {
 
 func (b *BucketRequest) AddExpiration(name string) error {
 	daysToExpiration := int32(NonCurrentVersionExpirationDays)
+	daysToAbortMultipart := int32(AbortIncompleteMultipartDays)
 
 	_, err := b.s3Client.PutBucketLifecycleConfiguration(b.ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(name),
@@ -98,6 +99,9 @@ func (b *BucketRequest) AddExpiration(name string) error {
 					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
 					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
 						NoncurrentDays: &daysToExpiration,
+					},
+					AbortIncompleteMultipartUpload: &types.AbortIncompleteMultipartUpload{
+						DaysAfterInitiation: &daysToAbortMultipart,
 					},
 				},
 			},
