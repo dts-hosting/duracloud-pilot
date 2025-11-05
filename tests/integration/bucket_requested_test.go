@@ -101,6 +101,42 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 		assert.Equal(t, "Enabled", versioning)
 	})
 
+	t.Run("Lifecycle", func(t *testing.T) {
+		var lifecycle *s3.GetBucketLifecycleConfigurationOutput
+		success := WaitForCondition(t, "lifecycle configuration", func() bool {
+			lifecycle = getBucketLifecycle(ctx, s3Client, bucketName)
+			return lifecycle != nil && len(lifecycle.Rules) > 0
+		}, DefaultWaitConfig())
+
+		if assert.True(t, success, "lifecycle should be configured") {
+			// All buckets should have expiration rule
+			var foundExpirationRule bool
+			for _, rule := range lifecycle.Rules {
+				if *rule.ID == "ExpireOldVersions" {
+					foundExpirationRule = true
+					assert.NotNil(t, rule.NoncurrentVersionExpiration)
+					assert.NotNil(t, rule.AbortIncompleteMultipartUpload)
+					break
+				}
+			}
+			assert.True(t, foundExpirationRule, "Should have ExpireOldVersions rule")
+
+			// Non-public buckets should also have transition rule
+			if !isPublicBucket {
+				var foundTransitionRule bool
+				for _, rule := range lifecycle.Rules {
+					if strings.HasPrefix(*rule.ID, "TransitionTo") {
+						foundTransitionRule = true
+						assert.NotEmpty(t, rule.Transitions)
+						assert.Equal(t, types.TransitionStorageClassGlacierIr, rule.Transitions[0].StorageClass)
+						break
+					}
+				}
+				assert.True(t, foundTransitionRule, "Standard bucket should have transition rule")
+			}
+		}
+	})
+
 	if isPublicBucket {
 		t.Run("PublicAccessBlock", func(t *testing.T) {
 			var publicAccessBlock *s3.GetPublicAccessBlockOutput
@@ -131,18 +167,6 @@ func verifyBucketConfig(t *testing.T, ctx context.Context, s3Client *s3.Client, 
 						assert.Equal(t, "AllowPublicRead", statement["Sid"])
 					}
 				}
-			}
-		})
-	} else {
-		t.Run("Lifecycle", func(t *testing.T) {
-			var lifecycle *s3.GetBucketLifecycleConfigurationOutput
-			success := WaitForCondition(t, "lifecycle configuration", func() bool {
-				lifecycle = getBucketLifecycle(ctx, s3Client, bucketName)
-				return lifecycle != nil && len(lifecycle.Rules) > 0 && len(lifecycle.Rules[0].Transitions) > 0
-			}, DefaultWaitConfig())
-
-			if assert.True(t, success, "lifecycle should be configured") {
-				assert.Equal(t, types.TransitionStorageClassGlacierIr, lifecycle.Rules[0].Transitions[0].StorageClass)
 			}
 		})
 	}
