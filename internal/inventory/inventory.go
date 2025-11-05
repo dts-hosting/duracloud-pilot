@@ -279,7 +279,7 @@ func (m *InventoryManifest) Bucket() string {
 func (m *InventoryManifest) Inventory() files.S3Object {
 	d := time.Now().UTC().Format("2006-01-02")
 	b := m.Bucket()
-	o := filepath.Join("inventory", m.SourceBucket, "inventory", "data", fmt.Sprintf("inventory-%s.csv", d))
+	o := filepath.Join("inventory", m.SourceBucket, "inventory", "csv", fmt.Sprintf("inventory-%s.csv", d))
 	return files.NewS3Object(b, o)
 }
 
