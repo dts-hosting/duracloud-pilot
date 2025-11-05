@@ -181,9 +181,7 @@ make workflow-inventory-unwrap
 make output-logs func=inventory-unwrap interval=5m
 
 # Generate a storage html report (uploads to managed bucket: reports)
-# Uses pre-computed stats from inventory unwrap. This command uploads fixture
-# stats files and then generates a report from them. In production, stats are
-# generated automatically when inventory manifests arrive.
+# This command uploads fixture stats files and then generates a report
 make workflow-storage-report
 make output-logs func=report-generator interval=5m
 ```
