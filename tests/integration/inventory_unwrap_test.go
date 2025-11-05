@@ -62,7 +62,7 @@ func TestInventoryUnwrapWorkflow(t *testing.T) {
 
 	// Wait for inventory unwrap function to process
 	// The function should create:
-	// 1. Concatenated CSV: inventory/{testBucketName}/inventory/data/inventory-{date}.csv
+	// 1. Concatenated CSV: inventory/{testBucketName}/inventory/csv/inventory-{date}.csv
 	// 2. Stats JSON: inventory/{testBucketName}/inventory/stats/stats-{date}.json
 
 	waitConfig := DefaultWaitConfig()
@@ -72,7 +72,7 @@ func TestInventoryUnwrapWorkflow(t *testing.T) {
 	csvCreated := WaitForCondition(t, "concatenated CSV creation", func() bool {
 		result, err := clients.S3.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
 			Bucket: aws.String(managedBucket),
-			Prefix: aws.String(fmt.Sprintf("inventory/%s/inventory/data/inventory-", testBucketName)),
+			Prefix: aws.String(fmt.Sprintf("inventory/%s/inventory/csv/inventory-", testBucketName)),
 		})
 		if err != nil {
 			t.Logf("Error listing objects: %v", err)
