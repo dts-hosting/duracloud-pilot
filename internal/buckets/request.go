@@ -85,57 +85,57 @@ func (b *BucketRequest) AddDenyUploadPolicy(name string) error {
 	return nil
 }
 
-func (b *BucketRequest) AddExpiration(name string) error {
+func (b *BucketRequest) AddLifecycle(name string, storageClass types.TransitionStorageClass, transitionDays int32) error {
 	daysToExpiration := int32(NonCurrentVersionExpirationDays)
 	daysToAbortMultipart := int32(AbortIncompleteMultipartDays)
 
-	_, err := b.s3Client.PutBucketLifecycleConfiguration(b.ctx, &s3.PutBucketLifecycleConfigurationInput{
-		Bucket: aws.String(name),
-		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
-			Rules: []types.LifecycleRule{
-				{
-					ID:     aws.String("ExpireOldVersions"),
-					Status: types.ExpirationStatusEnabled,
-					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
-					NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
-						NoncurrentDays: &daysToExpiration,
-					},
-					AbortIncompleteMultipartUpload: &types.AbortIncompleteMultipartUpload{
-						DaysAfterInitiation: &daysToAbortMultipart,
-					},
-				},
+	rules := []types.LifecycleRule{
+		{
+			ID:     aws.String("ExpireOldVersions"),
+			Status: types.ExpirationStatusEnabled,
+			Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
+			AbortIncompleteMultipartUpload: &types.AbortIncompleteMultipartUpload{
+				DaysAfterInitiation: &daysToAbortMultipart,
+			},
+			Expiration: &types.LifecycleExpiration{
+				ExpiredObjectDeleteMarker: aws.Bool(true),
+			},
+			NoncurrentVersionExpiration: &types.NoncurrentVersionExpiration{
+				NoncurrentDays: &daysToExpiration,
 			},
 		},
-	})
-	if err != nil {
-		return ErrorApplyingExpiration(err)
 	}
-	return nil
-}
 
-func (b *BucketRequest) AddLifecycle(name string, storageClass types.TransitionStorageClass, transitionDays int32) error {
+	// Only add transition rule if storageClass is specified (non-empty)
+	if storageClass != "" {
+		rules = append(rules, types.LifecycleRule{
+			ID:     aws.String(fmt.Sprintf("TransitionTo%s", storageClass)),
+			Status: types.ExpirationStatusEnabled,
+			Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
+			Transitions: []types.Transition{
+				{
+					Days:         &transitionDays,
+					StorageClass: storageClass,
+				},
+			},
+		})
+	}
+
 	_, err := b.s3Client.PutBucketLifecycleConfiguration(b.ctx, &s3.PutBucketLifecycleConfigurationInput{
 		Bucket: aws.String(name),
 		LifecycleConfiguration: &types.BucketLifecycleConfiguration{
-			Rules: []types.LifecycleRule{
-				{
-					ID:     aws.String(fmt.Sprintf("TransitionTo%s", storageClass)),
-					Status: types.ExpirationStatusEnabled,
-					Filter: &types.LifecycleRuleFilter{Prefix: aws.String("")},
-					Transitions: []types.Transition{
-						{
-							Days:         &transitionDays,
-							StorageClass: storageClass,
-						},
-					},
-				},
-			},
+			Rules: rules,
 		},
 	})
 	if err != nil {
 		return ErrorApplyingLifecycle(err)
 	}
 	return nil
+}
+
+func (b *BucketRequest) AddPublicLifecycle(name string) error {
+	// Public buckets get expiration rules only, no storage class transitions
+	return b.AddLifecycle(name, "", 0)
 }
 
 func (b *BucketRequest) AddPublicPolicy(name string) error {
@@ -414,11 +414,6 @@ func (b *BucketRequest) Setup() {
 		return
 	}
 
-	if err := b.AddExpiration(fullBucketName); err != nil {
-		localStatus[fullBucketName] = err.Error()
-		return
-	}
-
 	if IsPublicBucket(fullBucketName) {
 		if err := b.MakePublic(fullBucketName); err != nil {
 			localStatus[fullBucketName] = err.Error()
@@ -426,6 +421,11 @@ func (b *BucketRequest) Setup() {
 		}
 
 		if err := b.AddBucketTags(fullBucketName, PublicTagValue); err != nil {
+			localStatus[fullBucketName] = err.Error()
+			return
+		}
+
+		if err := b.AddPublicLifecycle(fullBucketName); err != nil {
 			localStatus[fullBucketName] = err.Error()
 			return
 		}
@@ -464,11 +464,6 @@ func (b *BucketRequest) Setup() {
 	}
 
 	if err := b.EnableVersioning(replicationBucketName); err != nil {
-		localStatus[replicationBucketName] = err.Error()
-		return
-	}
-
-	if err := b.AddExpiration(replicationBucketName); err != nil {
 		localStatus[replicationBucketName] = err.Error()
 		return
 	}
