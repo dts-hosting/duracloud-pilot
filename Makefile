@@ -197,10 +197,11 @@ workflow-inventory-unwrap: ## Unwrap inventory
 	@aws s3 cp ./files/inventory-manifest.json s3://$(STACK_NAME)-managed/inventory/duracloud-tftest-private/inventory/2000-01-01/manifest.json
 
 .PHONY: workflow-storage-report
-workflow-storage-report: ## Generate a storage html report
-	@aws s3 cp ./files/upload-me.txt s3://$(bucket)/files/file1.txt
-	@aws s3 cp ./files/upload-me.txt s3://$(bucket)/files/file2.txt
-	@aws s3 cp ./files/upload-me.txt s3://$(bucket)/files/file3.txt
+workflow-storage-report: ## Generate a storage html report (uses pre-computed stats)
+	@aws s3 cp ./files/stats-fixture-1.json \
+		s3://$(STACK_NAME)-managed/inventory/$(STACK_NAME)-private/inventory/stats/stats-2025-01-15.json
+	@aws s3 cp ./files/stats-fixture-2.json \
+		s3://$(STACK_NAME)-managed/inventory/$(STACK_NAME)-public/inventory/stats/stats-2025-01-15.json
 	@$(MAKE) run-function \
 		function=report-generator event=events/no-event/event.json
 

@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -23,7 +22,6 @@ var (
 	//go:embed templates/storage-report.html
 	storageReportTemplate string
 
-	cloudWatchClient  *cloudwatch.Client
 	managedBucketName string
 	s3Client          *s3.Client
 	stackName         string
@@ -49,14 +47,13 @@ func init() {
 
 	managedBucketName = os.Getenv("S3_MANAGED_BUCKET")
 	stackName = os.Getenv("STACK_NAME")
-	cloudWatchClient = cloudwatch.NewFromConfig(awsConfig)
 	s3Client = s3.NewFromConfig(awsConfig)
 }
 
 func handler(ctx context.Context) error {
 	log.Printf("Starting storage report generation for stack: %s", stackName)
 
-	generator := reports.NewStorageReportGenerator(s3Client, cloudWatchClient, stackName)
+	generator := reports.NewStorageReportGenerator(s3Client, stackName, managedBucketName)
 
 	reportHTML, err := generator.GenerateReport(ctx, storageReportTmpl)
 	if err != nil {
@@ -68,9 +65,9 @@ func handler(ctx context.Context) error {
 		return nil
 	}
 
-	// Upload report to the managed bucket
-	reportKey := fmt.Sprintf("reports/%s-storage-report.html",
-		time.Now().Format("2006-01-02T15-04-05"))
+	// Upload report to the managed bucket (date only, one per day)
+	reportKey := fmt.Sprintf("reports/storage-report-%s.html",
+		time.Now().UTC().Format("2006-01-02"))
 
 	err = generator.UploadReport(ctx, managedBucketName, reportKey, reportHTML)
 	if err != nil {
