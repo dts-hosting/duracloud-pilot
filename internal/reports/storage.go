@@ -15,12 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type StorageReportGenerator struct {
-	s3Client          *s3.Client
-	stackName         string
-	managedBucketName string
-}
-
 type BucketStats struct {
 	Name             string
 	TotalSize        int64
@@ -44,6 +38,12 @@ type ReportData struct {
 	TotalSize    int64
 	TotalObjects int64
 	BucketStats  []BucketStats
+}
+
+type StorageReportGenerator struct {
+	s3Client          *s3.Client
+	stackName         string
+	managedBucketName string
 }
 
 func NewStorageReportGenerator(s3Client *s3.Client, stackName, managedBucketName string) *StorageReportGenerator {
@@ -116,7 +116,7 @@ func (g *StorageReportGenerator) calculateAggregates(bucketStats []BucketStats) 
 	return report
 }
 
-func convertInventoryStats(stats *inventory.InventoryStats, tags map[string]string) BucketStats {
+func (g *StorageReportGenerator) convertInventoryStats(stats *inventory.InventoryStats, tags map[string]string) BucketStats {
 	// Convert prefix stats map to sorted slice
 	var prefixStats []PrefixStats
 	for prefix, stat := range stats.PrefixStats {
@@ -176,7 +176,7 @@ func (g *StorageReportGenerator) loadBucketStats(
 		}
 
 		// Convert inventory stats to report stats
-		bucketStats := convertInventoryStats(stats, tags)
+		bucketStats := g.convertInventoryStats(stats, tags)
 		allStats = append(allStats, bucketStats)
 	}
 
