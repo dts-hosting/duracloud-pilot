@@ -214,20 +214,4 @@ The application is built using a serverless architecture on AWS with the followi
 
 ## Deployment and Configuration
 
-The application is deployed using Terraform with the following parameters:
-
-- **stack_name**: Stack name prefix for all resources
-- **alert_email_address**: Email for alarm notifications (optional)
-- **lambda_architecture**: CPU architecture (arm64 or x86_64, default: x86_64)
-- **Docker Images**: Configurable Docker images for each Lambda function
-  - bucket_requested_image_uri: `docker.io/duracloud/bucket-requested:latest`
-  - checksum_exporter_image_uri: `docker.io/duracloud/checksum-exporter:latest`
-  - checksum_export_csv_report_image_uri: `docker.io/duracloud/checksum-export-csv-report:latest`
-  - checksum_failure_image_uri: `docker.io/duracloud/checksum-failure:latest`
-  - checksum_verification_image_uri: `docker.io/duracloud/checksum-verification:latest`
-  - file_deleted_image_uri: `docker.io/duracloud/file-deleted:latest`
-  - file_uploaded_image_uri: `docker.io/duracloud/file-uploaded:latest`
-  - report_generator_image_uri: `docker.io/duracloud/report-generator:latest`
-- **Scheduling**:
-  - checksum_exporter_schedule: `cron(0 8 1 * ? *)` (monthly on 1st at 8 AM UTC)
-  - report_generator_schedule: `cron(0 8 ? * SUN *)` (weekly on Sundays at 8 AM UTC)
+The application is deployed using [Terraform](./terraform/modules/duracloud).

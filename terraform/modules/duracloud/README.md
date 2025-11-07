@@ -31,6 +31,7 @@ module "duracloud" {
   checksum_verification_image_uri      = ""
   file_deleted_image_uri               = ""
   file_uploaded_image_uri              = ""
+  inventory_unwrap_img_uri             = ""
   report_generator_image_uri           = ""
 }
 ```
@@ -40,41 +41,20 @@ module "duracloud" {
 | Name      | Version |
 | --------- | ------- |
 | terraform | >= 1.0  |
-| aws       | ~> 5.0  |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| aws  | ~> 5.0  |
+| aws  | ~> 6.0  |
 
 ## Inputs
 
-| Name                                 | Description                                                                        | Type     | Default    | Required |
-| ------------------------------------ | ---------------------------------------------------------------------------------- | -------- | ---------- | :------: |
-| stack_name                           | Stack name prefix for resources                                                    | `string` | n/a        |   yes    |
-| alert_email_address                  | Email address for alarm notifications (leave empty to disable email alerts)        | `string` | `""`       |    no    |
-| bucket_requested_image_uri           | Docker image for Bucket Requested function (leave empty for local build)           | `string` | `""`       |    no    |
-| checksum_exporter_image_uri          | Docker image for Checksum Exporter function (leave empty for local build)          | `string` | `""`       |    no    |
-| checksum_export_csv_report_image_uri | Docker image for Checksum Export CSV report function (leave empty for local build) | `string` | `""`       |    no    |
-| checksum_failure_image_uri           | Docker image for Checksum Failure function (leave empty for local build)           | `string` | `""`       |    no    |
-| checksum_verification_image_uri      | Docker image for Checksum Verification function (leave empty for local build)      | `string` | `""`       |    no    |
-| file_deleted_image_uri               | Docker image for File Deleted function (leave empty for local build)               | `string` | `""`       |    no    |
-| file_uploaded_image_uri              | Docker image for File Uploaded function (leave empty for local build)              | `string` | `""`       |    no    |
-| report_generator_image_uri           | Docker image for Report Generator function (leave empty for local build)           | `string` | `""`       |    no    |
-| lambda_architecture                  | Architecture for Lambda functions                                                  | `string` | `"x86_64"` |    no    |
+Review the [variables](variables.tf) file.
 
 ## Outputs
 
-| Name                          | Description                                   |
-| ----------------------------- | --------------------------------------------- |
-| stack_name                    | The stack name used for resource naming       |
-| managed_bucket_name           | Name of the managed S3 bucket                 |
-| bucket_requested_name         | Name of the bucket requested S3 bucket        |
-| checksum_table_name           | Name of the DynamoDB checksum table           |
-| checksum_scheduler_table_name | Name of the DynamoDB checksum scheduler table |
-| sns_topic_arn                 | ARN of the SNS email alert topic              |
-| lambda_functions              | Map of Lambda function names and ARNs         |
+Review the [outputs](outputs.tf) file.
 
 ## Resources Created
 
@@ -87,6 +67,7 @@ module "duracloud" {
 - **Checksum Verification Function**: Processes checksum verification via TTL events
 - **File Deleted Function**: Processes S3 object deleted events
 - **File Uploaded Function**: Processes S3 object uploaded events
+- **Inventory Unwrap Function**: Converts csv.gz to .csv with headers, generates stats
 - **Report Generator Function**: Generates storage stats reports
 
 ### DynamoDB Tables
@@ -112,11 +93,15 @@ module "duracloud" {
 - DynamoDB write capacity monitoring
 - SQS dead letter queue monitoring
 
+Review [cloudwatch.tf] for full details.
+
 ### EventBridge Rules
 
 - Scheduled checksum exports (monthly)
 - Scheduled report generation (weekly)
 - S3 object created/deleted event processing
+
+Review [eventbridge.tf] for full details.
 
 ## Resource Naming
 
@@ -134,14 +119,7 @@ Email alerts are optional and controlled by the `alert_email_address` variable:
 - If provided, an SNS topic is created and CloudWatch alarms will send notifications
 - If empty, no SNS topic is created and alarms will not send email notifications
 
-## Architecture
-
-The module creates a serverless architecture for DuraCloud with the following data flow:
-
-1. **S3 Events** → EventBridge → SQS → Lambda functions
-2. **Scheduled Events** → EventBridge → Lambda functions
-3. **DynamoDB Streams** → Lambda functions
-4. **CloudWatch Alarms** → SNS → Email notifications (optional)
+The alert email address will receive a confirmation email that has to be accepted.
 
 ## License
 
