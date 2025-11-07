@@ -123,7 +123,7 @@ module "duracloud" {
 All resources are prefixed with the `stack_name` variable to ensure uniqueness and avoid conflicts. For example, with `stack_name = "duracloud-dev"`:
 
 - S3 buckets: `duracloud-dev-managed`, `duracloud-dev-bucket-requested`
-- Lambda functions: `duracloud-dev-BucketRequestedFunction`, etc.
+- Lambda functions: `duracloud-dev-bucket-requested-function`, etc.
 - DynamoDB tables: `duracloud-dev-checksum-table`, etc.
 - IAM roles: `duracloud-dev-bucket-requested-function-role`, etc.
 
