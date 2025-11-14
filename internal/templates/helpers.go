@@ -3,6 +3,7 @@ package templates
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ func GetReportGeneratorFuncMap() template.FuncMap {
 		"formatBytes":  FormatBytes,
 		"formatNumber": FormatNumber,
 		"formatTime":   FormatTime,
+		"urlDecode":    URLDecode,
 	}
 }
 
@@ -51,4 +53,13 @@ func FormatNumber(n int64) string {
 // FormatTime formats a time.Time value
 func FormatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05 UTC")
+}
+
+// URLDecode decodes a URL encoded string
+func URLDecode(s string) string {
+	decoded, err := url.QueryUnescape(s)
+	if err != nil {
+		return s
+	}
+	return decoded
 }

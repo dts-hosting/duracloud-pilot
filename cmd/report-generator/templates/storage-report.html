@@ -117,8 +117,8 @@
             <div class="prefix-stats">
                 {{range .PrefixStats}}
                 <div class="prefix-item">
-                    <strong>{{.Prefix}}</strong> - {{formatBytes .Size}}
-                    ({{formatNumber .ObjectCount}} files)
+                    <strong>{{urlDecode .Prefix}}</strong> - {{formatBytes
+                    .Size}} ({{formatNumber .ObjectCount}} files)
                 </div>
                 {{end}}
             </div>
