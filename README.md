@@ -219,6 +219,7 @@ make run-function \
 make run-function \
   function=report-generator \
   event=events/no-event/event.json
+make output-logs func=report-generator interval=5m
 ```
 
 ### Running Tests
